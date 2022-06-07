@@ -22,7 +22,7 @@ mitchell = Mitchell()
 def fine_dehalo(
     clip: vs.VideoNode, /, ref: vs.VideoNode | None = None,
     rx: float = 2.0, ry: float | None = None,
-    darkstr: float = 1.0, brightstr: float = 1.0,
+    darkstr: float = 0.0, brightstr: float = 1.0,
     lowsens: int = 50, highsens: int = 50,
     thmi: int | float = 80, thma: int | float = 128,
     thlimi: int | float = 50, thlima: int | float = 100,
@@ -169,7 +169,7 @@ def fine_dehalo(
 def dehalo_alpha(
     clip: vs.VideoNode,
     rx: float = 2.0, ry: float | None = None,
-    darkstr: float = 1.0, brightstr: float = 1.0,
+    darkstr: float = 0.0, brightstr: float = 1.0,
     lowsens: float = 50, highsens: float = 50,
     sigma_mask: float = 0.0, ss: float = 1.5, show_mask: bool = False
 ) -> vs.VideoNode:
