@@ -1,0 +1,5 @@
+VapourSynth>=58
+vsmask>=0.3.0
+vsutil>=0.6.0
+vs-kernels>=1.0.2
+vs-rgtools>=0.1.1
