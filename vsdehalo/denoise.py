@@ -77,6 +77,7 @@ def bidehalo(clip: vs.VideoNode, ref: vs.VideoNode | None = None,
 
     bm3d_in_args: Dict[str, Any] = dict(radius=2, planes=planes)
     bm3d_func: Type[BM3DCPU] | Type[BM3DCuda] | Type[BM3DCudaRTC]
+    # bilateral_func: [WhatTypeGoesHere?]
 
     if cuda is False:
         bm3d_func = BM3DCPU
@@ -84,11 +85,11 @@ def bidehalo(clip: vs.VideoNode, ref: vs.VideoNode | None = None,
         bm3d_in_args |= dict(sigma=10)
     elif cuda is True:
         bm3d_func = BM3DCuda
-        bilateral_func = core.bilateralgpu.Bilateral
+        bilateral_func = core.bilateralgpu.Bilateral  # type:ignore[assignment]
         bm3d_in_args |= dict(sigma=8)
     elif cuda == 'rtc':
         bm3d_func = BM3DCudaRTC
-        bilateral_func = core.bilateralgpu_rtc.Bilateral
+        bilateral_func = core.bilateralgpu_rtc.Bilateral  # type:ignore[assignment]
         bm3d_in_args |= dict(sigma=8)
     else:
         raise ValueError(f"bidehalo: 'Invalid cuda selection ({cuda})!'")
