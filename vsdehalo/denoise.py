@@ -103,4 +103,4 @@ def bidehalo(clip: vs.VideoNode, ref: vs.VideoNode | None = None,
     bidh = bilateral_func(clip, ref=ref, sigmaS=sigma_final, sigmaR=radius_final, planes=planes, **bilateral_args)
     bidh = depth(bidh, bits)
 
-    return core.akarin.Expr([clip, bidh], "x y min")
+    return core.std.Expr([clip, bidh], "x y min")
