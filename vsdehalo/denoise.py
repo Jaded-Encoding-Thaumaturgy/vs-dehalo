@@ -27,11 +27,11 @@ def bidehalo(clip: vs.VideoNode, ref: vs.VideoNode | None = None,
     This works by utilising the ``ref`` parameter in ``bilateral`` to limit the areas that get damaged,
     and how much it gets damaged. You should use this function in conjunction with a halo mask.
 
-    If a ref clip is passed, that will be masked onto the clip instead of a blurred clip.
+    If a ref clip is passed, that will be used as a ref for the second bilateral pass instead of a blurred clip.
     Both clips will be resampled to 16bit internally, and returned in the input bitdepth.
 
     Recommend values for `sigma` are between 0.8 and 2.0.
-    Recommend values for `range` are between 5 / 255 and 12 / 255.
+    Recommend values for `range` are between 5 / 255 and 15 / 255.
 
     Dependencies:
 
