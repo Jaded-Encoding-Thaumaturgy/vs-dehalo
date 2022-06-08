@@ -35,8 +35,8 @@ def bidehalo(clip: vs.VideoNode, ref: vs.VideoNode | None = None,
     :param range:               ``Bilateral`` range weight sigma.
     :param range_final:         Final ``Bilateral`` range weight sigma.
                                 if `None`, same as `range`.
-    :param cuda:                Use ``BM3DCUDA`` if True, else ``BM3DCPU``.
-                                Also accepts 'rtc' for ``BM3DRTC``.
+    :param cuda:                Use ``BM3DCUDA`` and `BilateralGPU` if True, else ``BM3DCPU`` and `Bilateral`.
+                                Also accepts 'rtc' for ``BM3DRTC`` and `BilateralGPU_RTC`.
     :param planes:              Specifies which planes will be processed.
                                 Any unprocessed planes will be simply copied.
     :param bm3d_args:           Additional parameters to pass to BM3D.
