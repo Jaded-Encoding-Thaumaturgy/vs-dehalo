@@ -1,5 +1,6 @@
 [flake8]
 count = True
+ignore = D100, D401
 max-line-length = 120
 exclude = stubs/*
 show-source = True
