@@ -8,14 +8,10 @@ from vsutil import depth, disallow_variable_format, fallback, get_depth
 core = vs.core
 
 
-# Given a different var because `range` param override
-range_builtin = range
-
-
 @disallow_variable_format
 def bidehalo(clip: vs.VideoNode, ref: vs.VideoNode | None = None,
              sigma: float = 1.5, sigma_final: float | None = None,
-             range: float = 5 / 255, range_final: float | None = None,
+             radius: float = 5 / 255, radius_final: float | None = None,
              cuda: bool | Literal['rtc'] = False,
              planes: int | Sequence[int] | None = None,
              bm3d_args: Dict[str, Any] = {},
@@ -31,7 +27,7 @@ def bidehalo(clip: vs.VideoNode, ref: vs.VideoNode | None = None,
     Both clips will be resampled to 16bit internally, and returned in the input bitdepth.
 
     Recommend values for `sigma` are between 0.8 and 2.0.
-    Recommend values for `range` are between 5 / 255 and 15 / 255.
+    Recommend values for `radius` are between 5 / 255 and 15 / 255.
 
     Dependencies:
 
@@ -46,9 +42,9 @@ def bidehalo(clip: vs.VideoNode, ref: vs.VideoNode | None = None,
     :param sigma_final:         Final ``Bilateral`` call's spatial weight sigma.
                                 You'll want this to be much weaker than the initial `sigma`.
                                 If `None`, 1/3rd of `sigma`.
-    :param range:               ``Bilateral`` range weight sigma.
-    :param range_final:         Final ``Bilateral`` range weight sigma.
-                                if `None`, same as `range`.
+    :param radius:              ``Bilateral`` radius weight sigma.
+    :param radius_final:        Final ``Bilateral`` radius weight sigma.
+                                if `None`, same as `radius`.
     :param cuda:                Use ``BM3DCUDA`` and `BilateralGPU` if True, else ``BM3DCPU`` and `Bilateral`.
                                 Also accepts 'rtc' for ``BM3DRTC`` and `BilateralGPU_RTC`.
     :param planes:              Specifies which planes will be processed.
@@ -66,14 +62,14 @@ def bidehalo(clip: vs.VideoNode, ref: vs.VideoNode | None = None,
     assert clip.format
 
     if planes is None:
-        planes = list(range_builtin(clip.format.num_planes))
+        planes = list(range(clip.format.num_planes))
     elif isinstance(planes, int):
         planes = [planes]
 
     bits = get_depth(clip)
 
     sigma_final = fallback(sigma_final, sigma / 3)
-    range_final = fallback(range_final, range)
+    radius_final = fallback(radius_final, radius)
 
     bm3d_in_args: Dict[str, Any] = dict(radius=2, planes=planes)
     bm3d_func: Type[BM3DCPU] | Type[BM3DCuda] | Type[BM3DCudaRTC]
@@ -100,11 +96,11 @@ def bidehalo(clip: vs.VideoNode, ref: vs.VideoNode | None = None,
     if ref is None:
         den = depth(bm3d_func(clip, **bm3d_in_args).clip, 16)
 
-        ref = bilateral_func(den, sigmaS=sigma, sigmaR=range, planes=planes, **bilateral_args)
+        ref = bilateral_func(den, sigmaS=sigma, sigmaR=radius, planes=planes, **bilateral_args)
     else:
         ref = depth(ref, 16)
 
-    bidh = bilateral_func(clip, ref=ref, sigmaS=sigma_final, sigmaR=range_final, planes=planes, **bilateral_args)
+    bidh = bilateral_func(clip, ref=ref, sigmaS=sigma_final, sigmaR=radius_final, planes=planes, **bilateral_args)
     bidh = depth(bidh, bits)
 
     return core.akarin.Expr([clip, bidh], "x y min")
