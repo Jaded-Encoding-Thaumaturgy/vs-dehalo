@@ -50,7 +50,8 @@ def bidehalo(
     :param radius:              ``Bilateral`` radius weight sigma.
     :param radius_final:        Final ``Bilateral`` radius weight sigma.
                                 if `None`, same as `radius`.
-    :param bm3d_sigma:          Sigma for ``BM3D``. Will be set to 8 by default for cuda, else 10.
+    :param bm3d_sigma:          Sigma for ``BM3D``. Accepts both a float and a list of floats.
+                                Will be set to [5.0, 3.6] by default for cuda, else [6.0, 4.5].
     :param tr:                  Temporal radius for BM3D
     :param cuda:                Use ``BM3DCUDA`` and `BilateralGPU` if True, else ``BM3DCPU`` and `Bilateral`.
                                 Also accepts 'rtc' for ``BM3DRTC`` and `BilateralGPU_RTC`.
@@ -72,6 +73,9 @@ def bidehalo(
 
     planes = normalise_planes(clip, planes)
 
+    if isinstance(bm3d_sigma, (int, float)):
+        bm3d_sigma = [float(bm3d_sigma)] * 2
+
     if matrix:
         clip = clip.std.SetFrameProp('_Matrix', int(matrix))
 
@@ -79,9 +83,11 @@ def bidehalo(
 
     if bm3d_sigma is None:
         if not cuda:
-            sigma_luma, sigma_chroma = 8, process_chroma and 6.4
+            sigma_luma, sigma_chroma = 5.0, process_chroma and 3.6
         else:
-            sigma_luma, sigma_chroma = 10, process_chroma and 8
+            sigma_luma, sigma_chroma = 6.0, process_chroma and 4.5
+    elif isinstance(bm3d_sigma, list):
+        sigma_luma, sigma_chroma = bm3d_sigma[0], bm3d_sigma[1]
 
     bm3d_pargs = (depth(clip, 16), [sigma_luma, sigma_chroma], tr)
 
