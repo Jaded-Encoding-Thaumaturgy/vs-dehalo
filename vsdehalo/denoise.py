@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Literal, Sequence
+from typing import Any, Dict, List, Literal, Sequence
 
 import vapoursynth as vs
 from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC
@@ -16,6 +16,7 @@ def bidehalo(
     sigma: float = 1.5, radius: float = 7,
     sigma_final: float | None = None,
     radius_final: float | None = None,
+    bm3d_sigma: float | List[float] | None = None,
     tr: int = 2, cuda: bool | Literal['rtc'] = False,
     planes: int | Sequence[int] | None = None,
     matrix: vs.MatrixCoefficients | int | None = None,
@@ -49,6 +50,7 @@ def bidehalo(
     :param radius:              ``Bilateral`` radius weight sigma.
     :param radius_final:        Final ``Bilateral`` radius weight sigma.
                                 if `None`, same as `radius`.
+    :param bm3d_sigma:          Sigma for ``BM3D``. Will be set to 8 by default for cuda, else 10.
     :param tr:                  Temporal radius for BM3D
     :param cuda:                Use ``BM3DCUDA`` and `BilateralGPU` if True, else ``BM3DCPU`` and `Bilateral`.
                                 Also accepts 'rtc' for ``BM3DRTC`` and `BilateralGPU_RTC`.
@@ -75,10 +77,11 @@ def bidehalo(
 
     process_chroma = 1 in planes or 2 in planes
 
-    if not cuda:
-        sigma_luma, sigma_chroma = 8, process_chroma and 6.4
-    else:
-        sigma_luma, sigma_chroma = 10, process_chroma and 8
+    if bm3d_sigma is None:
+        if not cuda:
+            sigma_luma, sigma_chroma = 8, process_chroma and 6.4
+        else:
+            sigma_luma, sigma_chroma = 10, process_chroma and 8
 
     bm3d_pargs = (depth(clip, 16), [sigma_luma, sigma_chroma], tr)
 
