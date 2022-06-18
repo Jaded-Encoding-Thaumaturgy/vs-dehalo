@@ -1,6 +1,6 @@
 VapourSynth>=58
-vsmask>=0.3.0
-vsutil>=0.6.0
+vsmask>=0.4.0
+vsutil>=0.7.0
+vsrgtools>=0.1.2
 vs-denoise>=1.0.0
 vs-kernels>=1.0.2
-vs-rgtools>=0.1.1
