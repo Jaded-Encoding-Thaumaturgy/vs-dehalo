@@ -68,7 +68,7 @@ def bidehalo(
     sigma_final = fallback(sigma_final, sigma / 3)
     radius_final = fallback(radius_final, radius)
 
-    planes = normalise_planes(clip, planes)
+    planes = normalise_planes(clip, planes, False)
 
     if matrix:
         clip = clip.std.SetFrameProp('_Matrix', int(matrix))
