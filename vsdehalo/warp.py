@@ -20,7 +20,7 @@ core = vs.core
 
 def edge_cleaner(
     clip: vs.VideoNode, strength: float = 10, rmode: int = 17,
-    hot: bool = False, smode: int = 0, edgemask: EdgeDetect = PrewittStd()
+    hot: bool = False, smode: bool = False, edgemask: EdgeDetect = PrewittStd()
 ) -> vs.VideoNode:
     clip = _ensure_format(clip)
 
@@ -33,7 +33,7 @@ def edge_cleaner(
 
     clip_y, *chroma = split(clip)
 
-    if smode > 0:
+    if smode:
         strength += 4
 
     main = pad_reflect(clip_y, 6, 6, 6, 6)
