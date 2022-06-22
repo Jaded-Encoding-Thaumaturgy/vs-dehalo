@@ -9,8 +9,8 @@ with open("requirements.txt") as fh:
     install_requires = fh.read()
 
 name = "vsdehalo"
-version = "0.0.1"
-release = "0.0.1"
+version = "0.1.0"
+release = "0.1.0"
 
 setuptools.setup(
     name=name,
