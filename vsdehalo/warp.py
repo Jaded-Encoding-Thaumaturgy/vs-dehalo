@@ -6,7 +6,7 @@ from math import sqrt
 from vsmask.better_vsutil import join, split
 from vsmask.edge import EdgeDetect, PrewittStd
 from vsmask.types import ensure_format as _ensure_format
-from vsrgtools import boxblur, minblur, removegrain, repair
+from vsrgtools import box_blur, min_blur, removegrain, repair
 from vsrgtools.util import wmean_matrix, normalise_planes
 from vsutil import Dither
 from vsutil import Range as CRange
@@ -95,7 +95,7 @@ def YAHR(
     main = vdepth(main, bits, clip.format.sample_type, dither_type=Dither.NONE)
 
     blur_diff, blur_yahr_diff = [
-        c.std.MakeDiff(boxblur(minblur(c, 2), wmean_matrix, planes=planes), planes=planes) for c in (clip, main)
+        c.std.MakeDiff(box_blur(min_blur(c, 2), wmean_matrix, planes=planes), planes=planes) for c in (clip, main)
     ]
 
     rep_diff = repair(blur_diff, blur_yahr_diff, [13 if i in planes else 0 for i in range(clip.format.num_planes)])
@@ -109,7 +109,7 @@ def YAHR(
 
     mask1 = core.tcanny.TCanny(vEdge, sqrt(expand * 2), mode=-1)
 
-    mask2 = boxblur(vEdge, wmean_matrix).std.Invert()
+    mask2 = box_blur(vEdge, wmean_matrix).std.Invert()
 
     mask = core.std.Expr([mask1, mask2], 'x 16 * y min')
 
