@@ -1,19 +1,19 @@
 from __future__ import annotations
-from typing import Sequence
+
+from math import sqrt
 
 import vapoursynth as vs
-from math import sqrt
 from vsmask.better_vsutil import join, split
 from vsmask.edge import EdgeDetect, PrewittStd
 from vsmask.types import ensure_format as _ensure_format
 from vsrgtools import box_blur, min_blur, removegrain, repair
-from vsrgtools.util import wmean_matrix, normalise_planes
+from vsrgtools.util import PlanesT, cround, normalise_planes, wmean_matrix
 from vsutil import Dither
 from vsutil import Range as CRange
 from vsutil import depth as vdepth
-from vsutil import get_peak_value, scale_value, get_y
+from vsutil import get_peak_value, get_y, scale_value
 
-from .utils import cround, pad_reflect
+from .utils import pad_reflect
 
 core = vs.core
 
@@ -71,11 +71,7 @@ def edge_cleaner(
     return join([final, *chroma], clip.format.color_family)
 
 
-def YAHR(
-    clip: vs.VideoNode, blur: int = 2,
-    depth: int = 32, expand: float = 5,
-    planes: int | Sequence[int] | None = None
-) -> vs.VideoNode:
+def YAHR(clip: vs.VideoNode, blur: int = 2, depth: int = 32, expand: float = 5, planes: PlanesT = None) -> vs.VideoNode:
     clip = _ensure_format(clip)
 
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:

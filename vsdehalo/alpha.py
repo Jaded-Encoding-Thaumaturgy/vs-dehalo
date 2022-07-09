@@ -7,10 +7,9 @@ from vsmask.edge import EdgeDetect, Robinson3
 from vsmask.types import ensure_format as _ensure_format
 from vsmask.util import XxpandMode, expand, inpand
 from vsrgtools import contrasharpening, contrasharpening_dehalo, repair
+from vsrgtools.util import clamp, cround, mod4
 from vsutil import Range as CRange
 from vsutil import disallow_variable_format, get_peak_value, get_y, scale_value
-
-from .utils import clamp, cround, mod4
 
 core = vs.core
 
