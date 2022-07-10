@@ -6,7 +6,7 @@ import vapoursynth as vs
 from vsmask.better_vsutil import join, split
 from vsmask.edge import EdgeDetect, PrewittStd
 from vsrgtools import box_blur, min_blur, removegrain, repair
-from vsrgtools.util import PlanesT, cround, normalise_planes, wmean_matrix
+from vsrgtools.util import PlanesT, cround, mean_matrix, normalise_planes, wmean_matrix
 from vsutil import Dither
 from vsutil import Range as CRange
 from vsutil import depth as vdepth
@@ -21,55 +21,75 @@ core = vs.core
 @disallow_variable_resolution
 def edge_cleaner(
     clip: vs.VideoNode, strength: float = 10, rmode: int = 17,
-    hot: bool = False, smode: bool = False, edgemask: EdgeDetect = PrewittStd()
+    hot: bool = False, smode: bool = False, planes: PlanesT = 0,
+    edgemask: EdgeDetect = PrewittStd()
 ) -> vs.VideoNode:
     assert clip.format
 
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise ValueError('edge_cleaner: format not supported')
 
-    bits = clip.format.bits_per_sample
+    planes = normalise_planes(clip, planes)
 
-    peak = get_peak_value(clip)
+    work_clip, *chroma = split(clip) if planes == [0] else (clip, )
+    assert work_clip.format
 
-    clip_y, *chroma = split(clip)
+    peak = get_peak_value(work_clip)
+    bits = work_clip.format.bits_per_sample
+    is_float = work_clip.format.sample_type == vs.FLOAT
 
     if smode:
         strength += 4
 
-    main = pad_reflect(clip_y, 6, 6, 6, 6)
+    padded = pad_reflect(work_clip, 6, 6, 6, 6)
 
     # warpsf is way too slow
-    main = vdepth(main, 16, vs.INTEGER, dither_type=Dither.NONE) if clip.format.sample_type == vs.FLOAT else main
-    main = main.warp.AWarpSharp2(blur=1, depth=cround(strength / 2)).std.Crop(6, 6, 6, 6)
-    main = vdepth(main, bits, clip.format.sample_type, dither_type=Dither.NONE)
+    if is_float:
+        padded = vdepth(padded, 16, vs.INTEGER, dither_type=Dither.NONE)
 
-    main = repair(main, clip_y, rmode)
+    warped = padded.warp.AWarpSharp2(blur=1, depth=cround(strength / 2), planes=planes)
 
-    mask = edgemask.edgemask(clip_y).std.Expr(
+    warped = warped.std.Crop(6, 6, 6, 6)
+
+    if is_float:
+        warped = vdepth(
+            warped, work_clip.format.bits_per_sample, work_clip.format.sample_type, dither_type=Dither.NONE
+        )
+
+    warped = repair(warped, work_clip, [
+        rmode if i in planes else 0 for i in range(work_clip.format.num_planes)
+    ])
+
+    y_mask = get_y(work_clip)
+
+    mask = edgemask.edgemask(y_mask).std.Expr(
         f'x {scale_value(4, 8, bits, CRange.FULL)} < 0 x {scale_value(32, 8, bits, CRange.FULL)} > {peak} x ? ?'
-    ).std.InvertMask().std.Convolution([1] * 9)
+    ).std.InvertMask()
+    mask = box_blur(mask, mean_matrix)
 
-    final = clip_y.std.MaskedMerge(main, mask)
+    final = work_clip.std.MaskedMerge(warped, mask)
 
     if hot:
-        final = repair(final, clip_y, 2)
+        final = repair(final, work_clip, 2)
 
     if smode:
-        clean = removegrain(clip_y, 17)
+        clean = removegrain(y_mask, 17)
 
-        diff = clip_y.std.MakeDiff(clean)
-
-        expr = f'x {scale_value(4, 8, bits, CRange.FULL)} < 0 x {scale_value(16, 8, bits, CRange.FULL)} > {peak} x ? ?'
+        diff = y_mask.std.MakeDiff(clean)
 
         mask = edgemask.edgemask(
             diff.std.Levels(scale_value(40, 8, bits, CRange.FULL), scale_value(168, 8, bits, CRange.FULL), 0.35)
         )
-        mask = removegrain(mask, 7).std.Expr(expr)
+        mask = removegrain(mask, 7).std.Expr(
+            f'x {scale_value(4, 8, bits, CRange.FULL)} < 0 x {scale_value(16, 8, bits, CRange.FULL)} > {peak} x ? ?'
+        )
 
-        final = final.std.MaskedMerge(clip_y, mask)
+        final = final.std.MaskedMerge(work_clip, mask)
 
-    return join([final, *chroma], clip.format.color_family)
+    if chroma:
+        return join([final, *chroma], clip.format.color_family)
+
+    return final
 
 
 @disallow_variable_format
@@ -78,7 +98,7 @@ def YAHR(clip: vs.VideoNode, blur: int = 2, depth: int = 32, expand: float = 5, 
     assert clip.format
 
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
-        raise ValueError('edge_cleaner: format not supported')
+        raise ValueError('YAHR: format not supported')
 
     planes = normalise_planes(clip, planes)
 
