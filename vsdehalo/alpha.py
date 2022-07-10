@@ -10,7 +10,7 @@ from vsmask.util import XxpandMode, expand, inpand
 from vsrgtools import contrasharpening, contrasharpening_dehalo, repair
 from vsrgtools.util import PlanesT, clamp, cround, mod4, norm_expr_planes, normalise_planes
 from vsutil import Range as CRange
-from vsutil import disallow_variable_format, get_peak_value, get_y, scale_value
+from vsutil import disallow_variable_format, disallow_variable_resolution, get_peak_value, get_y, scale_value
 
 core = vs.core
 
@@ -19,6 +19,7 @@ mitchell = Mitchell()
 
 
 @disallow_variable_format
+@disallow_variable_resolution
 def fine_dehalo(
     clip: vs.VideoNode, /, ref: vs.VideoNode | None = None,
     rx: float = 2.0, ry: float | None = None,
@@ -176,6 +177,7 @@ def fine_dehalo(
 
 
 @disallow_variable_format
+@disallow_variable_resolution
 def dehalo_alpha(
     clip: vs.VideoNode,
     rx: float = 2.0, ry: float | None = None,

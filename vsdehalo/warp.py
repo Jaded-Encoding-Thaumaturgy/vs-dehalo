@@ -5,24 +5,25 @@ from math import sqrt
 import vapoursynth as vs
 from vsmask.better_vsutil import join, split
 from vsmask.edge import EdgeDetect, PrewittStd
-from vsmask.types import ensure_format as _ensure_format
 from vsrgtools import box_blur, min_blur, removegrain, repair
 from vsrgtools.util import PlanesT, cround, normalise_planes, wmean_matrix
 from vsutil import Dither
 from vsutil import Range as CRange
 from vsutil import depth as vdepth
-from vsutil import get_peak_value, get_y, scale_value
+from vsutil import disallow_variable_format, disallow_variable_resolution, get_peak_value, get_y, scale_value
 
 from .utils import pad_reflect
 
 core = vs.core
 
 
+@disallow_variable_format
+@disallow_variable_resolution
 def edge_cleaner(
     clip: vs.VideoNode, strength: float = 10, rmode: int = 17,
     hot: bool = False, smode: bool = False, edgemask: EdgeDetect = PrewittStd()
 ) -> vs.VideoNode:
-    clip = _ensure_format(clip)
+    assert clip.format
 
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise ValueError('edge_cleaner: format not supported')
@@ -71,8 +72,10 @@ def edge_cleaner(
     return join([final, *chroma], clip.format.color_family)
 
 
+@disallow_variable_format
+@disallow_variable_resolution
 def YAHR(clip: vs.VideoNode, blur: int = 2, depth: int = 32, expand: float = 5, planes: PlanesT = None) -> vs.VideoNode:
-    clip = _ensure_format(clip)
+    assert clip.format
 
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise ValueError('edge_cleaner: format not supported')
