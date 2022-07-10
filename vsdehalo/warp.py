@@ -74,7 +74,7 @@ def edge_cleaner(
 
 @disallow_variable_format
 @disallow_variable_resolution
-def YAHR(clip: vs.VideoNode, blur: int = 2, depth: int = 32, expand: float = 5, planes: PlanesT = None) -> vs.VideoNode:
+def YAHR(clip: vs.VideoNode, blur: int = 2, depth: int = 32, expand: float = 5, planes: PlanesT = 0) -> vs.VideoNode:
     assert clip.format
 
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
@@ -82,34 +82,54 @@ def YAHR(clip: vs.VideoNode, blur: int = 2, depth: int = 32, expand: float = 5, 
 
     planes = normalise_planes(clip, planes)
 
-    bits = clip.format.bits_per_sample
+    work_clip, *chroma = split(clip) if planes == [0] else (clip, )
+    assert work_clip.format
 
-    clip_y = get_y(clip)
+    is_float = work_clip.format.sample_type == vs.FLOAT
 
-    main = pad_reflect(clip, 6, 6, 6, 6)
+    padded = pad_reflect(work_clip, 6, 6, 6, 6)
 
     # warpsf is way too slow
-    main = vdepth(main, 16, vs.INTEGER, dither_type=Dither.NONE) if clip.format.sample_type == vs.FLOAT else main
-    main = main.warp.AWarpSharp2(blur=blur, depth=depth, planes=planes).std.Crop(6, 6, 6, 6)
-    main = vdepth(main, bits, clip.format.sample_type, dither_type=Dither.NONE)
+    if is_float:
+        padded = vdepth(padded, 16, vs.INTEGER, dither_type=Dither.NONE)
 
-    blur_diff, blur_yahr_diff = [
-        c.std.MakeDiff(box_blur(min_blur(c, 2), wmean_matrix, planes=planes), planes=planes) for c in (clip, main)
+    warped = padded.warp.AWarpSharp2(blur=blur, depth=depth, planes=planes)
+
+    warped = warped.std.Crop(6, 6, 6, 6)
+
+    if is_float:
+        warped = vdepth(
+            warped, work_clip.format.bits_per_sample, work_clip.format.sample_type, dither_type=Dither.NONE
+        )
+
+    blur_diff, blur_warped_diff = [
+        c.std.MakeDiff(
+            box_blur(min_blur(c, 2, planes), wmean_matrix, planes), planes
+        ) for c in (work_clip, warped)
     ]
 
-    rep_diff = repair(blur_diff, blur_yahr_diff, [13 if i in planes else 0 for i in range(clip.format.num_planes)])
+    rep_diff = repair(blur_diff, blur_warped_diff, [
+        13 if i in planes else 0 for i in range(work_clip.format.num_planes)
+    ])
 
-    yahr = clip.std.MakeDiff(blur_diff.std.MakeDiff(rep_diff, planes=planes), planes=planes)
+    yahr = work_clip.std.MakeDiff(blur_diff.std.MakeDiff(rep_diff, planes), planes)
+
+    y_mask = get_y(work_clip)
 
     vEdge = core.std.Expr(
-        [clip_y, clip_y.std.Maximum().std.Maximum()],
-        f'y x - {8 * get_peak_value(clip_y) / 255} - 128 *'
+        [y_mask, y_mask.std.Maximum().std.Maximum()],
+        f'y x - {8 * get_peak_value(y_mask) / 255} - 128 *'
     )
 
-    mask1 = core.tcanny.TCanny(vEdge, sqrt(expand * 2), mode=-1)
+    mask1 = vEdge.tcanny.TCanny(sqrt(expand * 2), mode=-1)
 
     mask2 = box_blur(vEdge, wmean_matrix).std.Invert()
 
-    mask = core.std.Expr([mask1, mask2], 'x 16 * y min')
+    mask = core.std.Expr([mask1, mask2], 'x 16 * y min 0 max 1 min' if is_float else 'x 16 * y min')
 
-    return clip.std.MaskedMerge(yahr, mask, planes=planes)
+    final = clip.std.MaskedMerge(yahr, mask, planes)
+
+    if chroma:
+        return join([final, *chroma], clip.format.color_family)
+
+    return final
