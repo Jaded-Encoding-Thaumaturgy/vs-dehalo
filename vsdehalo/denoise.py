@@ -1,26 +1,24 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Literal, Sequence
+from typing import Any, Dict, Literal
 
 import vapoursynth as vs
 from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC
-from vsrgtools.util import norm_expr_planes, normalise_planes
-from vsutil import depth, disallow_variable_format, fallback, get_depth
+from vsrgtools.util import PlanesT, norm_expr_planes, normalise_planes
+from vsutil import depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth
 
 core = vs.core
 
 
 @disallow_variable_format
+@disallow_variable_resolution
 def bidehalo(
     clip: vs.VideoNode,
     sigma: float = 1.5, radius: float = 7,
-    sigma_final: float | None = None,
-    radius_final: float | None = None,
+    sigma_final: float | None = None, radius_final: float | None = None,
     tr: int = 2, cuda: bool | Literal['rtc'] = False,
-    planes: int | Sequence[int] | None = None,
-    matrix: vs.MatrixCoefficients | int | None = None,
-    bm3d_args: Dict[str, Any] = {},
-    bilateral_args: Dict[str, Any] = {}
+    planes: PlanesT = 0, matrix: int | vs.MatrixCoefficients | None = None,
+    bm3d_args: Dict[str, Any] | None = None, bilateral_args: Dict[str, Any] | None = None
 ) -> vs.VideoNode:
     """
     Simple dehalo function that uses ``bilateral`` and ``BM3D`` to remove bright haloing around edges.
@@ -65,10 +63,13 @@ def bidehalo(
 
     bits = get_depth(clip)
 
+    bm3d_args = fallback(bm3d_args, dict[str, Any]())
+    bilateral_args = fallback(bilateral_args, dict[str, Any]())
+
     sigma_final = fallback(sigma_final, sigma / 3)
     radius_final = fallback(radius_final, radius)
 
-    planes = normalise_planes(clip, planes, False)
+    planes = normalise_planes(clip, planes)
 
     if matrix:
         clip = clip.std.SetFrameProp('_Matrix', int(matrix))
@@ -90,7 +91,7 @@ def bidehalo(
 
         ref = den.bilateral.Bilateral(None, sigma, radius / 255, planes, **bilateral_args)
     else:
-        bil_gpu_args: Dict[str, Any] = dict(sigma_spatial=sigma, **bilateral_args)
+        bil_gpu_args = dict[str, Any](sigma_spatial=sigma, **bilateral_args)
 
         if cuda is True:
             den = BM3DCuda(*bm3d_pargs, **bm3d_args).clip
