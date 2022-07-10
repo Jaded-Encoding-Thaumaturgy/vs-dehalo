@@ -92,7 +92,7 @@ def fine_dehalo(
                 dehaloed, work_clip, contra if isinstance(contra, int) else None, planes=planes
             )
         else:
-            dehaloed = contrasharpening_dehalo(dehaloed, work_clip, contra)  # FIXME, doesn't accept planes!
+            dehaloed = contrasharpening_dehalo(dehaloed, work_clip, contra, planes)
 
     # Main edges #
     # Basic edge detection, thresholding will be applied later.

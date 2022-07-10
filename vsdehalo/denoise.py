@@ -127,7 +127,7 @@ def HQDeringmod(
     thr: float = 12.0, elast: float = 2.0, darkthr: float | None = None,
     sigma: float = 128.0, sigma2: float | None = None,
     sbsize: int | None = None, sosize: int | None = None,
-    contra: int | float | bool | None = None, drrep: int = 13,
+    contra: int | float | bool = 1.2, drrep: int = 13,
     planes: PlanesT = 0, show: bool = False, **kwargs: Any
 ) -> vs.VideoNode:
     """
@@ -239,7 +239,7 @@ def HQDeringmod(
         if isinstance(contra, int):
             smoothed = contrasharpening(smoothed, work_clip, contra, 13, planes)
         else:
-            smoothed = contrasharpening_dehalo(smoothed, work_clip, contra)  # FIXME doesn't accept planes
+            smoothed = contrasharpening_dehalo(smoothed, work_clip, contra, planes)
 
     # Post-Process: Repairing
     if set(rep_dr) != {0}:
