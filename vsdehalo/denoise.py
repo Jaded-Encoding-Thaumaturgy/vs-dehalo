@@ -8,13 +8,12 @@ import vapoursynth as vs
 from mvsfunc import LimitFilter  # type: ignore
 from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC, Prefilter, prefilter_clip
 from vsmask.edge import Prewitt
-from havsfunc import AvsPrewitt
 from vsmask.util import expand, inpand
-from vsrgtools import contrasharpening, contrasharpening_dehalo, removegrain, repair
+from vsrgtools import contrasharpening, contrasharpening_dehalo, repair
 from vsrgtools.util import PlanesT, norm_expr_planes, normalise_planes, normalise_seq
 from vsutil import (
-    depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth, get_peak_value, iterate, join, scale_value,
-    split
+    depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth, get_peak_value, iterate, join,
+    scale_value, split
 )
 
 core = vs.core
@@ -122,7 +121,7 @@ def bidehalo(
 @disallow_variable_resolution
 def HQDeringmod(
     clip: vs.VideoNode,
-    smooth: vs.VideoNode | Prefilter | Tuple[Prefilter, Prefilter] | None = None,
+    smooth: vs.VideoNode | Prefilter | Tuple[Prefilter, Prefilter] = Prefilter.MINBLUR1,
     ringmask: vs.VideoNode | None = None,
     mrad: int = 1, msmooth: int = 1, minp: int = 1, mthr: int = 60, incedge: bool = False,
     thr: float = 12.0, elast: float = 2.0, darkthr: float | None = None,
@@ -194,8 +193,6 @@ def HQDeringmod(
     work_clip, *chroma = split(clip) if planes == [0] else (clip, )
     assert work_clip.format
 
-    rep_4 = [4 if i in planes else 0 for i in range(work_clip.format.num_planes)]
-
     is_HD = clip.width >= 1280 or clip.height >= 720
 
     # Parameters for deringing kernel
@@ -204,9 +201,6 @@ def HQDeringmod(
     sosize = fallback(sosize, 6 if is_HD else 4)
 
     darkthr = fallback(darkthr, thr / 4)
-
-    if smooth is None:
-        smooth = Prefilter.MINBLUR2 if is_HD else Prefilter.MINBLUR1
 
     rep_dr = [drrep if i in planes else 0 for i in range(work_clip.format.num_planes)]
 
