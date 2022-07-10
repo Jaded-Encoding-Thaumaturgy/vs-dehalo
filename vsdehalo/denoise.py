@@ -6,7 +6,7 @@ from typing import Any, Dict, Literal, Tuple
 
 import vapoursynth as vs
 from mvsfunc import LimitFilter  # type: ignore
-from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC, Prefilter, prefilter_clip
+from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC, Prefilter
 from vsmask.edge import Prewitt
 from vsmask.util import expand, inpand
 from vsrgtools import contrasharpening, contrasharpening_dehalo, repair
@@ -217,11 +217,11 @@ def HQDeringmod(
                 ])
 
         if smoothy == smoothc or work_clip.format.num_planes == 1:
-            smoothed = prefilter_clip(work_clip, smoothy, planes, **_get_kwargs(smoothy))
+            smoothed = smoothy(work_clip, planes, **_get_kwargs(smoothy))
         else:
             smoothed = core.std.ShufflePlanes([
-                prefilter_clip(work_clip, smoothy, 0, **_get_kwargs(smoothy)),
-                prefilter_clip(work_clip, smoothc, list(set(planes) - {0}), **_get_kwargs(smoothc))
+                smoothy(work_clip, 0, **_get_kwargs(smoothy)),
+                smoothc(work_clip, list(set(planes) - {0}), **_get_kwargs(smoothc))
             ], [0, 1, 2], vs.YUV)
     else:
         assert work_clip.format and smooth.format
