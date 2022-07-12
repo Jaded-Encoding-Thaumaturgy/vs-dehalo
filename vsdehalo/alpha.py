@@ -7,10 +7,12 @@ from vskernels import BSpline, Lanczos, Mitchell
 from vsmask.better_vsutil import join, split
 from vsmask.edge import EdgeDetect, Robinson3
 from vsmask.util import XxpandMode, expand, inpand
-from vsrgtools import contrasharpening, contrasharpening_dehalo, repair
-from vsrgtools.util import PlanesT, clamp, cround, mod4, norm_expr_planes, normalise_planes
+from vsrgtools import ConvMode, contrasharpening, contrasharpening_dehalo, repair
+from vsrgtools.util import PlanesT, clamp, cround, mod4, norm_expr_planes, normalise_planes, aka_expr_available
 from vsutil import Range as CRange
 from vsutil import disallow_variable_format, disallow_variable_resolution, get_peak_value, get_y, scale_value
+
+from . import masks
 
 core = vs.core
 
@@ -174,6 +176,95 @@ def fine_dehalo(
         return join([y_merge, *chroma], clip.format.color_family)
 
     return y_merge
+
+
+def fine_dehalo2(
+    clip: vs.VideoNode, mode: ConvMode = ConvMode.SQUARE,
+    radius: int = 2, planes: PlanesT = 0, show_mask: bool = False
+) -> vs.VideoNode:
+    """
+    Halo removal function for 2nd order halos.
+
+    :param clip:        Source clip.
+    :param mode:        Horizontal/Vertical or both way.
+    :param radius:      Radius for mask growing.
+    :param planes:      Planes to process.
+    :param show_mask:    Whether to return the computed mask.
+
+    :return:            Dehaloed clip.
+    """
+    assert clip.format
+
+    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
+        raise ValueError('fine_dehalo2: format not supported')
+
+    peak = get_peak_value(clip)
+    planes = normalise_planes(clip, planes)
+
+    is_float = clip.format.sample_type == vs.FLOAT
+
+    work_clip, *chroma = split(clip) if planes == [0] else (clip, )
+
+    norm_expr = partial(norm_expr_planes, work_clip, planes=planes)
+
+    mask_h = mask_v = None
+
+    # intended to be reversed
+    if mode in {ConvMode.SQUARE, ConvMode.VERTICAL}:
+        mask_h = work_clip.std.Convolution([1, 2, 1, 0, 0, 0, -1, -2, -1], None, 4, planes, False)
+
+    if mode in {ConvMode.SQUARE, ConvMode.HORIZONTAL}:
+        mask_v = work_clip.std.Convolution([1, 0, -1, 2, 0, -2, 1, 0, -1], None, 4, planes, False)
+
+    fix_h = work_clip.std.Convolution([-1, -2, 0, 0, 40, 0, 0, -2, -1], mode=ConvMode.HORIZONTAL)
+    fix_v = work_clip.std.Convolution([-2, -1, 0, 0, 40, 0, 0, -1, -2], mode=ConvMode.VERTICAL)
+
+    if mask_h and mask_v:
+        mask_h = core.std.Expr([mask_h, mask_v], norm_expr('x 3 * y -'))
+        mask_v = core.std.Expr([mask_v, mask_h], norm_expr('x 3 * y -'))
+    elif mask_h:
+        mask_h = mask_h.std.Expr(norm_expr('x 3 *'))
+    elif mask_v:
+        mask_v = mask_v.std.Expr(norm_expr('x 3 *'))
+
+    if is_float:
+        mask_h = mask_h and mask_h.std.Limiter(planes=planes)
+        mask_v = mask_v and mask_v.std.Limiter(planes=planes)
+
+    mask_h, mask_v = [
+        masks.grow_mask(mask, radius, 1.8, planes, coordinates=coord) if mask else None
+        for mask, coord in [
+            (mask_h, [0, 1, 0, 0, 0, 0, 1, 0]), (mask_v, [0, 0, 0, 1, 1, 0, 0, 0])
+        ]
+    ]
+
+    if is_float:
+        mask_h = mask_h and mask_h.std.Limiter()
+        mask_v = mask_v and mask_v.std.Limiter()
+
+    if show_mask:
+        if mask_h and mask_v:
+            return core.std.Expr([mask_h, mask_v], 'x y max')
+        else:
+            assert (mask := mask_h or mask_v)
+            return mask
+    else:
+        if aka_expr_available and mask_h and mask_v:
+            dehaloed = core.akarin.Expr(
+                [work_clip, fix_h, fix_v, mask_h, mask_v],
+                f'a {peak} / MH! b {peak} / MV! x 1 MH@ - * y MH@ * + 1 MV@ - * z MV@ * +'
+            )
+        else:
+            dehaloed = work_clip
+            if mask_v:
+                dehaloed = dehaloed.std.MaskedMerge(fix_h, mask_v)
+            if mask_h:
+                dehaloed = dehaloed.std.MaskedMerge(fix_v, mask_h)
+
+    if chroma:
+        return join([dehaloed, *chroma], clip.format.color_family)
+
+    return dehaloed
 
 
 @disallow_variable_format
