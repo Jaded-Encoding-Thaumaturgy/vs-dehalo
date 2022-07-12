@@ -1,7 +1,8 @@
 from typing import Any
 import vapoursynth as vs
 from vsmask.edge import TriticalTCanny
-from vsrgtools.util import PlanesT, iterate, norm_expr_planes
+from vsrgtools import box_blur
+from vsrgtools.util import PlanesT, iterate, norm_expr_planes, wmean_matrix
 from vsutil import disallow_variable_format, disallow_variable_resolution
 
 __all__ = [
@@ -98,3 +99,43 @@ def black_hat(src: vs.VideoNode, radius: int = 1, planes: PlanesT = None, **kwar
     closed = closing(src, radius, planes, **kwargs)
 
     return core.std.Expr([closed, src], norm_expr_planes(src, 'x y -', planes))
+
+
+@disallow_variable_format
+@disallow_variable_resolution
+def outer_hat(src: vs.VideoNode, radius: int = 1, planes: PlanesT = None, **kwargs: Any) -> vs.VideoNode:
+    if radius < 1:
+        raise RuntimeError('mask.outer_hat: radius has to be greater than 0!')
+
+    dilated = dilation(src, radius, planes, **kwargs)
+
+    return core.std.Expr([dilated, src], norm_expr_planes(src, 'x y -', planes))
+
+
+@disallow_variable_format
+@disallow_variable_resolution
+def inner_hat(src: vs.VideoNode, radius: int = 1, planes: PlanesT = None, **kwargs: Any) -> vs.VideoNode:
+    if radius < 1:
+        raise RuntimeError('mask.inner_hat: radius has to be greater than 0!')
+
+    eroded = erosion(src, radius, planes, **kwargs)
+
+    return core.std.Expr([eroded, src], norm_expr_planes(src, 'x y -', planes))
+
+
+@disallow_variable_format
+@disallow_variable_resolution
+def grow_mask(
+    mask: vs.VideoNode, radius: int = 1, multiply: float = 1.0,
+    planes: PlanesT = None, **kwargs: Any
+) -> vs.VideoNode:
+    closed = closing(mask, **kwargs)
+    dilated = dilation(closed, **kwargs)
+    outer = outer_hat(dilated, radius, **kwargs)
+
+    blurred = box_blur(outer, wmean_matrix, planes)
+
+    if multiply != 1.0:
+        return blurred.std.Expr(f'x {multiply} *')
+
+    return blurred
