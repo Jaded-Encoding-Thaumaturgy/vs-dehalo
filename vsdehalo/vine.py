@@ -190,7 +190,7 @@ def dehalo(
         check_ref_clip(src, (halo_mask := mask))
     elif mask:
         halo_mask = fine_dehalo(
-            work_clip, None, 2.1, 2.1, ss=1, edgeproc=0.5, showmask=True, planes=planes
+            work_clip, None, 2.1, 2.1, ss=1, edgeproc=0.5, show_mask=True, planes=planes
         )
         halo_mask = masks.dilation(halo_mask, 1, planes)
     else:
