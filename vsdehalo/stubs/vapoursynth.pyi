@@ -620,6 +620,27 @@ class Function:
     def __signature__(self) -> inspect.Signature: ...
     def __call__(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any: ...
 
+# implementation: akarin
+
+class _Plugin_akarin_Core_Bound(Plugin):
+    """
+    This class implements the module definitions for the corresponding VapourSynth plugin.
+    This class cannot be imported.
+    """
+    def Cambi(self, clip: "VideoNode", window_size: typing.Optional[int] = None, topk: typing.Optional[float] = None, tvi_threshold: typing.Optional[float] = None, scores: typing.Optional[int] = None, scaling: typing.Optional[float] = None) -> "VideoNode": ...
+    def Expr(self, clips: typing.Union["VideoNode", typing.Sequence["VideoNode"]], expr: typing.Union[str, bytes, bytearray, typing.Sequence[typing.Union[str, bytes, bytearray]]], format: typing.Optional[int] = None, opt: typing.Optional[int] = None, boundary: typing.Optional[int] = None) -> "VideoNode": ...
+    def Version(self) -> "VideoNode": ...
+
+
+class _Plugin_akarin_VideoNode_Bound(Plugin):
+    """
+    This class implements the module definitions for the corresponding VapourSynth plugin.
+    This class cannot be imported.
+    """
+    def Cambi(self, window_size: typing.Optional[int] = None, topk: typing.Optional[float] = None, tvi_threshold: typing.Optional[float] = None, scores: typing.Optional[int] = None, scaling: typing.Optional[float] = None) -> "VideoNode": ...
+    def Expr(self, expr: typing.Union[str, bytes, bytearray, typing.Sequence[typing.Union[str, bytes, bytearray]]], format: typing.Optional[int] = None, opt: typing.Optional[int] = None, boundary: typing.Optional[int] = None) -> "VideoNode": ...
+
+# end implementation
 
 # implementation: bilateral
 
@@ -1031,6 +1052,13 @@ class _Plugin_warp_VideoNode_Bound(Plugin):
 
 
 class VideoNode:
+# instance_bound_VideoNode: akarin
+    @property
+    def akarin(self) -> _Plugin_akarin_VideoNode_Bound:
+        """
+        Akarin's Experimental Filters
+        """
+# end instance
 # instance_bound_VideoNode: bilateral
     @property
     def bilateral(self) -> _Plugin_bilateral_VideoNode_Bound:
@@ -1205,6 +1233,13 @@ class LogHandle:
 
 
 class Core:
+# instance_bound_Core: akarin
+    @property
+    def akarin(self) -> _Plugin_akarin_Core_Bound:
+        """
+        Akarin's Experimental Filters
+        """
+# end instance
 # instance_bound_Core: bilateral
     @property
     def bilateral(self) -> _Plugin_bilateral_Core_Bound:
