@@ -30,7 +30,7 @@ def fine_dehalo(
     ss: float = 1.25,
     contra: int | float | bool = 0.0, excl: bool = True,
     edgeproc: float = 0.0, planes: PlanesT = 0,
-    edgemask: EdgeDetect = Robinson3(), showmask: int = 0
+    edgemask: EdgeDetect = Robinson3(), show_mask: int = 0
 ) -> vs.VideoNode:
     """
     Halo removal script that uses DeHalo_alpha with a few masks and optional contra-sharpening
@@ -53,7 +53,7 @@ def fine_dehalo(
     :param excl:        If True, add an addionnal step to exclude edges close to each other
     :param edgeproc:    If > 0, it will add the edgemask to the processing, defaults to 0.0
     :param edgemask:    Internal mask used for detecting the edges, defaults to Robinson3()
-    :param showmask:    1 - 7
+    :param show_mask:    1 - 7
     :return:            Dehaloed clip
     """
     assert clip.format
@@ -152,20 +152,20 @@ def fine_dehalo(
     mask = mask.std.Expr(norm_expr(f'x 2 * 0 max {peak} min'))
 
     # Masking #
-    if showmask:
-        if showmask == 1:
+    if show_mask:
+        if show_mask == 1:
             return mask
-        if showmask == 2:
+        if show_mask == 2:
             return shrink
-        if showmask == 3:
+        if show_mask == 3:
             return edges
-        if showmask == 4:
+        if show_mask == 4:
             return strong
-        if showmask == 5:
+        if show_mask == 5:
             return light
-        if showmask == 6:
+        if show_mask == 6:
             return large
-        if showmask == 7:
+        if show_mask == 7:
             return shr_med
 
     y_merge = work_clip.std.MaskedMerge(dehaloed, mask, planes)
