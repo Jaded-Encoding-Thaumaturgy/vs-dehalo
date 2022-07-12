@@ -147,7 +147,7 @@ def YAHR(clip: vs.VideoNode, blur: int = 2, depth: int = 32, expand: float = 5, 
 
     mask = core.std.Expr([mask1, mask2], 'x 16 * y min 0 max 1 min' if is_float else 'x 16 * y min')
 
-    final = clip.std.MaskedMerge(yahr, mask, planes)
+    final = work_clip.std.MaskedMerge(yahr, mask, planes)
 
     if chroma:
         return join([final, *chroma], clip.format.color_family)
