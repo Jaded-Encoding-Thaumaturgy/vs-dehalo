@@ -5,7 +5,7 @@ from math import sqrt
 import vapoursynth as vs
 from vsmask.better_vsutil import join, split
 from vsmask.edge import EdgeDetect, PrewittStd
-from vsrgtools import box_blur, min_blur, removegrain, repair
+from vsrgtools import min_blur, removegrain, repair
 from vsrgtools.util import PlanesT, cround, mean_matrix, normalise_planes, wmean_matrix
 from vsutil import Dither
 from vsutil import Range as CRange
@@ -65,7 +65,7 @@ def edge_cleaner(
     mask = edgemask.edgemask(y_mask).std.Expr(
         f'x {scale_value(4, 8, bits, CRange.FULL)} < 0 x {scale_value(32, 8, bits, CRange.FULL)} > {peak} x ? ?'
     ).std.InvertMask()
-    mask = box_blur(mask, mean_matrix)
+    mask = mask.std.Convolution(mean_matrix)
 
     final = work_clip.std.MaskedMerge(warped, mask)
 
@@ -124,7 +124,7 @@ def YAHR(clip: vs.VideoNode, blur: int = 2, depth: int = 32, expand: float = 5, 
 
     blur_diff, blur_warped_diff = [
         c.std.MakeDiff(
-            box_blur(min_blur(c, 2, planes), wmean_matrix, planes), planes
+            min_blur(c, 2, planes).std.Convolution(wmean_matrix, planes=planes), planes
         ) for c in (work_clip, warped)
     ]
 
@@ -143,7 +143,7 @@ def YAHR(clip: vs.VideoNode, blur: int = 2, depth: int = 32, expand: float = 5, 
 
     mask1 = vEdge.tcanny.TCanny(sqrt(expand * 2), mode=-1)
 
-    mask2 = box_blur(vEdge, wmean_matrix).std.Invert()
+    mask2 = vEdge.std.Convolution(wmean_matrix).std.Invert()
 
     mask = core.std.Expr([mask1, mask2], 'x 16 * y min 0 max 1 min' if is_float else 'x 16 * y min')
 
