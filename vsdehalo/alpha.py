@@ -7,8 +7,8 @@ from vskernels import BSpline, Lanczos, Mitchell
 from vsmask.better_vsutil import join, split
 from vsmask.edge import EdgeDetect, Robinson3
 from vsmask.util import XxpandMode, expand, inpand
-from vsrgtools import ConvMode, contrasharpening, contrasharpening_dehalo, repair
-from vsrgtools.util import PlanesT, clamp, cround, mod4, norm_expr_planes, normalise_planes, aka_expr_available
+from vsrgtools import ConvMode, box_blur, contrasharpening, contrasharpening_dehalo, repair
+from vsrgtools.util import PlanesT, aka_expr_available, clamp, cround, mod4, norm_expr_planes, normalise_planes
 from vsutil import Range as CRange
 from vsutil import disallow_variable_format, disallow_variable_resolution, get_peak_value, get_y, scale_value
 
@@ -130,7 +130,7 @@ def fine_dehalo(
 
     # This mask is almost binary, which will produce distinct
     # discontinuities once applied. Then we have to smooth it.
-    shrink = shrink.std.BoxBlur(planes, 1, 2, 1, 2)
+    shrink = box_blur(shrink, 1, 2, planes)
 
     # Final mask building #
 

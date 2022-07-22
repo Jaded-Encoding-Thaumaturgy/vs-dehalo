@@ -1,7 +1,7 @@
 from typing import Any
+
 import vapoursynth as vs
 from vsmask.edge import TriticalTCanny
-from vsrgtools import box_blur
 from vsrgtools.util import PlanesT, iterate, norm_expr_planes, wmean_matrix
 from vsutil import disallow_variable_format, disallow_variable_resolution
 
@@ -133,7 +133,7 @@ def grow_mask(
     dilated = dilation(closed, **kwargs)
     outer = outer_hat(dilated, radius, **kwargs)
 
-    blurred = box_blur(outer, wmean_matrix, planes)
+    blurred = outer.std.Convolution(wmean_matrix, planes=planes)
 
     if multiply != 1.0:
         return blurred.std.Expr(f'x {multiply} *')
