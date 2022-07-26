@@ -3,12 +3,12 @@ from __future__ import annotations
 from functools import partial
 
 import vapoursynth as vs
+from vsexprtools.util import PlanesT, aka_expr_available, clamp, cround, mod4, norm_expr_planes, normalise_planes
 from vskernels import BSpline, Lanczos, Mitchell
 from vsmask.better_vsutil import join, split
 from vsmask.edge import EdgeDetect, Robinson3
 from vsmask.util import XxpandMode, expand, inpand
 from vsrgtools import ConvMode, box_blur, contrasharpening, contrasharpening_dehalo, repair
-from vsrgtools.util import PlanesT, aka_expr_available, clamp, cround, mod4, norm_expr_planes, normalise_planes
 from vsutil import Range as CRange
 from vsutil import disallow_variable_format, disallow_variable_resolution, get_peak_value, get_y, scale_value
 
