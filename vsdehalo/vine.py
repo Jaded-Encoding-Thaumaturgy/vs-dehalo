@@ -9,10 +9,10 @@ from typing import Any, Tuple
 import vapoursynth as vs
 from vsdenoise import CCDMode, CCDPoints, MVTools, PelType, Prefilter, ccd, knl_means_cl
 from vsdenoise.utils import check_ref_clip, planes_to_channelmode
+from vsexprtools.util import PlanesT, norm_expr_planes, normalise_planes
 from vskernels import Bicubic
 from vskernels.types import Matrix
-from vsrgtools import gauss_blur, gauss_fmtc_blur, lehmer_diff_merge, contrasharpening_dehalo
-from vsrgtools.util import PlanesT, norm_expr_planes, normalise_planes
+from vsrgtools import contrasharpening_dehalo, gauss_blur, gauss_fmtc_blur, lehmer_diff_merge
 from vsutil import disallow_variable_format, disallow_variable_resolution, get_y, join, split
 
 from . import masks

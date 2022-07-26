@@ -1,8 +1,9 @@
 from typing import Any
 
 import vapoursynth as vs
+from vsexprtools.util import PlanesT, norm_expr_planes
 from vsmask.edge import TriticalTCanny
-from vsrgtools.util import PlanesT, iterate, norm_expr_planes, wmean_matrix
+from vsrgtools.util import iterate, wmean_matrix
 from vsutil import disallow_variable_format, disallow_variable_resolution
 
 __all__ = [

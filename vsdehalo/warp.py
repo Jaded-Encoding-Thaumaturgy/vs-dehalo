@@ -3,10 +3,11 @@ from __future__ import annotations
 from math import sqrt
 
 import vapoursynth as vs
+from vsexprtools.util import PlanesT, cround, normalise_planes
 from vsmask.better_vsutil import join, split
 from vsmask.edge import EdgeDetect, PrewittStd
 from vsrgtools import min_blur, removegrain, repair
-from vsrgtools.util import PlanesT, cround, mean_matrix, normalise_planes, wmean_matrix
+from vsrgtools.util import mean_matrix, wmean_matrix
 from vsutil import Dither
 from vsutil import Range as CRange
 from vsutil import depth as vdepth

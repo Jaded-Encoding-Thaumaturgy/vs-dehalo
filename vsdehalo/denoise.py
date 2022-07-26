@@ -7,10 +7,10 @@ from typing import Any, Dict, Literal, Tuple
 import vapoursynth as vs
 from mvsfunc import LimitFilter  # type: ignore
 from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC, Prefilter
+from vsexprtools.util import PlanesT, norm_expr_planes, normalise_planes, normalise_seq
 from vsmask.edge import Prewitt
 from vsmask.util import expand, inpand
 from vsrgtools import contrasharpening, contrasharpening_dehalo, repair
-from vsrgtools.util import PlanesT, norm_expr_planes, normalise_planes, normalise_seq
 from vsutil import (
     depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth, get_peak_value, iterate, join,
     scale_value, split
