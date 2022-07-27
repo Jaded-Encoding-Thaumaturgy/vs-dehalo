@@ -5,12 +5,11 @@ from math import ceil
 from typing import Any, Dict, Literal, Tuple
 
 import vapoursynth as vs
-from mvsfunc import LimitFilter  # type: ignore
 from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC, Prefilter
 from vsexprtools.util import PlanesT, norm_expr_planes, normalise_planes, normalise_seq
 from vsmask.edge import Prewitt
 from vsmask.util import expand, inpand
-from vsrgtools import contrasharpening, contrasharpening_dehalo, repair
+from vsrgtools import contrasharpening, contrasharpening_dehalo, repair, limit_filter, LimitFilterMode
 from vsutil import (
     depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth, get_peak_value, iterate, join,
     scale_value, split
@@ -128,7 +127,7 @@ def HQDeringmod(
     smooth: vs.VideoNode | Prefilter | Tuple[Prefilter, Prefilter] = Prefilter.MINBLUR1,
     ringmask: vs.VideoNode | None = None,
     mrad: int = 1, msmooth: int = 1, minp: int = 1, mthr: int = 60, incedge: bool = False,
-    thr: float = 12.0, elast: float = 2.0, darkthr: float | None = None,
+    thr: int = 12, elast: float = 2.0, darkthr: int | None = None,
     sigma: float = 128.0, sigma2: float | None = None,
     sbsize: int | None = None, sosize: int | None = None,
     contra: int | float | bool = 1.2, drrep: int = 13,
@@ -204,7 +203,7 @@ def HQDeringmod(
     sbsize = fallback(sbsize, 8 if is_HD else 6)
     sosize = fallback(sosize, 6 if is_HD else 4)
 
-    darkthr = fallback(darkthr, thr / 4)
+    darkthr = fallback(darkthr, thr // 4)
 
     rep_dr = [drrep if i in planes else 0 for i in range(work_clip.format.num_planes)]
 
@@ -252,10 +251,9 @@ def HQDeringmod(
         repclp = work_clip
 
     # Post-Process: Limiting
-    if not ((thr <= 0 and darkthr <= 0) or (thr >= 255 and darkthr >= 255)):
-        limitclp = LimitFilter(repclp, work_clip, thr=thr, elast=elast, brighten_thr=darkthr, planes=planes)
-    else:
-        limitclp = repclp
+    limitclp = limit_filter(
+        repclp, work_clip, None, LimitFilterMode.CLAMPING, planes, thr, elast, darkthr
+    )
 
     if ringmask is None:
         # FIXME: <= instead of < for lthr, Vardë?
