@@ -16,6 +16,10 @@ from vsutil import (
     scale_value, split
 )
 
+__all__ = [
+    'bidehalo', 'HQDeringmod'
+]
+
 core = vs.core
 
 

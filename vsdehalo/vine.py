@@ -18,7 +18,9 @@ from vsutil import disallow_variable_format, disallow_variable_resolution, get_y
 from . import masks
 from .alpha import fine_dehalo
 
-__all__ = ['super_clip', 'smooth_clip', 'dehalo']
+__all__ = [
+    'super_clip', 'smooth_clip', 'dehalo'
+]
 
 core = vs.core
 

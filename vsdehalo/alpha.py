@@ -14,6 +14,10 @@ from vsutil import disallow_variable_format, disallow_variable_resolution, get_p
 
 from . import masks
 
+__all__ = [
+    'fine_dehalo', 'fine_dehalo2', 'dehalo_alpha'
+]
+
 core = vs.core
 
 bspline = BSpline()
