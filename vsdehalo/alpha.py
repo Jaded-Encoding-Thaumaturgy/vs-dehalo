@@ -39,7 +39,7 @@ def fine_dehalo(
     edgemask: EdgeDetect = Robinson3(), show_mask: int = 0
 ) -> vs.VideoNode:
     """
-    Halo removal script that uses DeHalo_alpha with a few masks and optional contra-sharpening
+    Halo removal script that uses dehalo_alpha with a few masks and optional contra-sharpening
     to try remove halos without removing important details (like line edges).
     :param clip:        Source clip
     :param ref:         Dehaloed reference. Replace dehalo_alpha call
@@ -66,6 +66,18 @@ def fine_dehalo(
 
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise ValueError('fine_dehalo: format not supported')
+
+    if not all(x >= 1 for x in (ss, rx, ry) if x is not None):
+        raise ValueError('fine_dehalo: rfactor, rx, and ry must all be bigger than 1.0!')
+
+    if not 0 <= darkstr <= 1:
+        raise ValueError('fine_dehalo: darkstr must be between 0.0 and 1.0!')
+
+    if not all(0 <= sens < 100 for sens in (lowsens, highsens)):
+        raise ValueError('fine_dehalo: lowsens and highsens must be between 0 and 100!')
+
+    if show_mask is not False and not (0 < int(show_mask) <= 7):
+        raise ValueError('fine_dehalo: Valid values for show_mask are 0–7!')
 
     thmi, thma, thlimi, thlima = [
         scale_value(x, 8, clip.format.bits_per_sample, CRange.FULL)
