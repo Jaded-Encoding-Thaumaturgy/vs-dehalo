@@ -15,6 +15,10 @@ from vsutil import disallow_variable_format, disallow_variable_resolution, get_p
 
 from .utils import pad_reflect
 
+__all__ = [
+    'edge_cleaner', 'YAHR'
+]
+
 core = vs.core
 
 

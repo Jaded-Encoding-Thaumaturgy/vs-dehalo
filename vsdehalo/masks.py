@@ -7,9 +7,14 @@ from vsrgtools.util import iterate, wmean_matrix
 from vsutil import disallow_variable_format, disallow_variable_resolution
 
 __all__ = [
+    # Masking kernels
     'TritSigmaTCanny',
-    # morpho functions
-    'dilation', 'erosion', 'closing', 'opening', 'gradient', 'top_hat', 'black_hat'
+    # Morpho functions
+    'dilation', 'erosion', 'closing', 'opening', 'gradient',
+    'top_hat', 'black_hat', 'outer_hat', 'inner_hat',
+    # General functions
+    'grow_mask'
+
 ]
 
 core = vs.core

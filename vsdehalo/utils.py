@@ -4,6 +4,10 @@ import vapoursynth as vs
 from vskernels import Point
 from vsutil import disallow_variable_format, disallow_variable_resolution
 
+__all__ = [
+    'pad_reflect'
+]
+
 core = vs.core
 
 
