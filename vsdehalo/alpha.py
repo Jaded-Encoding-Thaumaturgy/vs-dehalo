@@ -73,7 +73,7 @@ def fine_dehalo(
     if not 0 <= darkstr <= 1:
         raise ValueError('fine_dehalo: darkstr must be between 0.0 and 1.0!')
 
-    if not all(0 <= sens < 100 for sens in (lowsens, highsens)):
+    if not all(0 <= sens <= 100 for sens in (lowsens, highsens)):
         raise ValueError('fine_dehalo: lowsens and highsens must be between 0 and 100!')
 
     if show_mask is not False and not (0 < int(show_mask) <= 7):
