@@ -21,9 +21,9 @@ core = vs.core
 
 
 class TritSigmaTCanny(TriticalTCanny):
-    sigma: float = 0
+    sigma: float = 0.0
 
-    def __init__(self, sigma: float = 0) -> None:
+    def __init__(self, sigma: float = 0.0) -> None:
         super().__init__()
         self.sigma = sigma
 

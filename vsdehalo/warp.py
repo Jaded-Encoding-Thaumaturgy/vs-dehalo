@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from math import sqrt
+from typing import Sequence
 
 import vapoursynth as vs
 from vsexprtools.util import PlanesT, cround, normalise_planes
@@ -99,7 +100,9 @@ def edge_cleaner(
 
 @disallow_variable_format
 @disallow_variable_resolution
-def YAHR(clip: vs.VideoNode, blur: int = 2, depth: int = 32, expand: float = 5, planes: PlanesT = 0) -> vs.VideoNode:
+def YAHR(
+    clip: vs.VideoNode, blur: int = 2, depth: int | Sequence[int] = 32, expand: float = 5, planes: PlanesT = 0
+) -> vs.VideoNode:
     assert clip.format
 
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
