@@ -1,7 +1,7 @@
 from typing import Any
 
 import vapoursynth as vs
-from vsexprtools.util import PlanesT, norm_expr_planes
+from vsexprtools import PlanesT, norm_expr_planes
 from vsmask.edge import TriticalTCanny
 from vsrgtools.util import iterate, wmean_matrix
 from vsutil import disallow_variable_format, disallow_variable_resolution
@@ -21,9 +21,9 @@ core = vs.core
 
 
 class TritSigmaTCanny(TriticalTCanny):
-    sigma: float = 0
+    sigma: float = 0.0
 
-    def __init__(self, sigma: float = 0) -> None:
+    def __init__(self, sigma: float = 0.0) -> None:
         super().__init__()
         self.sigma = sigma
 

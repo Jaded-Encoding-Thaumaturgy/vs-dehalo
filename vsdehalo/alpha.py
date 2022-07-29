@@ -3,14 +3,15 @@ from __future__ import annotations
 from functools import partial
 
 import vapoursynth as vs
-from vsexprtools.util import PlanesT, aka_expr_available, clamp, cround, mod4, norm_expr_planes, normalise_planes
+from vsexprtools import PlanesT, aka_expr_available, clamp, cround, mod4, norm_expr_planes, normalise_planes
 from vskernels import BSpline, Lanczos, Mitchell
-from vsmask.better_vsutil import join, split
 from vsmask.edge import EdgeDetect, Robinson3
 from vsmask.util import XxpandMode, expand, inpand
 from vsrgtools import ConvMode, box_blur, contrasharpening, contrasharpening_dehalo, repair
-from vsutil import Range as CRange
-from vsutil import disallow_variable_format, disallow_variable_resolution, get_peak_value, get_y, scale_value
+from vsutil import (
+    Range as CRange, disallow_variable_format, disallow_variable_resolution, get_peak_value, get_y, join, scale_value,
+    split
+)
 
 from . import masks
 
@@ -31,12 +32,12 @@ def fine_dehalo(
     rx: float = 2.0, ry: float | None = None,
     darkstr: float = 0.0, brightstr: float = 1.0,
     lowsens: int = 50, highsens: int = 50,
-    thmi: int | float = 80, thma: int | float = 128,
-    thlimi: int | float = 50, thlima: int | float = 100,
+    thmi: float = 80.0, thma: float = 128.0,
+    thlimi: float = 50.0, thlima: float = 100.0,
     ss: float = 1.25,
-    contra: int | float | bool = 0.0, excl: bool = True,
+    contra: float | bool = 0.0, excl: bool = True,
     edgeproc: float = 0.0, planes: PlanesT = 0,
-    edgemask: EdgeDetect = Robinson3(), show_mask: int = 0
+    edgemask: EdgeDetect = Robinson3(), show_mask: int = False
 ) -> vs.VideoNode:
     """
     Halo removal script that uses dehalo_alpha with a few masks and optional contra-sharpening
@@ -73,7 +74,7 @@ def fine_dehalo(
     if not 0 <= darkstr <= 1:
         raise ValueError('fine_dehalo: darkstr must be between 0.0 and 1.0!')
 
-    if not all(0 <= sens < 100 for sens in (lowsens, highsens)):
+    if not all(0 <= sens <= 100 for sens in (lowsens, highsens)):
         raise ValueError('fine_dehalo: lowsens and highsens must be between 0 and 100!')
 
     if show_mask is not False and not (0 < int(show_mask) <= 7):
@@ -289,7 +290,7 @@ def dehalo_alpha(
     clip: vs.VideoNode,
     rx: float = 2.0, ry: float | None = None,
     darkstr: float = 0.0, brightstr: float = 1.0,
-    lowsens: float = 50, highsens: float = 50,
+    lowsens: float = 50.0, highsens: float = 50.0,
     sigma_mask: float = 0.0, ss: float = 1.5,
     planes: PlanesT = 0, show_mask: bool = False
 ) -> vs.VideoNode:
