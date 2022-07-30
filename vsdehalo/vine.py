@@ -7,8 +7,8 @@ from math import log
 from typing import Any, Tuple
 
 import vapoursynth as vs
-from vsdenoise import CCDMode, CCDPoints, MVTools, PelType, Prefilter, ccd, knl_means_cl
-from vsdenoise.utils import check_ref_clip, planes_to_channelmode
+from vsdenoise import CCDMode, CCDPoints, ChannelMode, MVTools, PelType, Prefilter, ccd, knl_means_cl
+from vsdenoise.utils import check_ref_clip
 from vsexprtools.util import PlanesT, norm_expr_planes, normalise_planes
 from vskernels import Bicubic
 from vskernels.types import Matrix
@@ -90,7 +90,7 @@ def smooth_clip(
 
     upsampled = pel_type(work_clip, 2)
 
-    knl_channels = planes_to_channelmode(planes)
+    knl_channels = ChannelMode.from_planes(planes)
 
     if fast:
         upsampled = ccd(
