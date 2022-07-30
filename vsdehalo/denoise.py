@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from functools import partial
 from math import ceil
-from typing import Any, Dict, Literal, Tuple
+from typing import Any, Dict, Literal, Tuple, cast
 
 import vapoursynth as vs
 from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC, Prefilter
-from vsexprtools.util import PlanesT, norm_expr_planes, normalise_planes, normalise_seq
+from vsexprtools import PlanesT, norm_expr_planes, normalise_planes, normalise_seq
 from vsmask.edge import Prewitt
 from vsmask.util import expand, inpand
 from vsrgtools import contrasharpening, contrasharpening_dehalo, repair, limit_filter, LimitFilterMode
@@ -209,7 +209,7 @@ def HQDeringmod(
 
     # Kernel: Smoothing
     if not isinstance(smooth, vs.VideoNode):
-        smoothy, smoothc = normalise_seq(smooth, 2)
+        smoothy, smoothc = cast(Tuple[Prefilter, Prefilter], normalise_seq(smooth, 2))
 
         def _get_kwargs(pref: Prefilter) -> Dict[str, Any]:
             if pref != Prefilter.DFTTEST:
