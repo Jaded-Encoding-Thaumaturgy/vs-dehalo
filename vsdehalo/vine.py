@@ -1,6 +1,7 @@
 """
 Modern rewrite of IFeelBloated's package with scene detection.
 """
+from __future__ import annotations
 
 from functools import partial
 from math import log
