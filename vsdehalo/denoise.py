@@ -9,10 +9,10 @@ from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC, Prefilter
 from vsexprtools import PlanesT, norm_expr_planes, normalise_planes, normalise_seq
 from vsmask.edge import Prewitt
 from vsmask.util import expand, inpand
-from vsrgtools import contrasharpening, contrasharpening_dehalo, repair, limit_filter, LimitFilterMode
+from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair
 from vsutil import (
-    depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth, get_peak_value, iterate, join,
-    scale_value, split
+    depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth, get_peak_value, get_y, iterate,
+    join, scale_value, split
 )
 
 __all__ = [
@@ -229,13 +229,13 @@ def HQDeringmod(
     else:
         assert work_clip.format and smooth.format
 
-        if smooth.format.id != work_clip.format.id:
+        if smooth.format.id != clip.format.id:
             raise ValueError("Smooth clip format must match the source clip's!")
 
-        if smooth.width != work_clip.width or smooth.height != work_clip.height:
+        if smooth.width != clip.width or smooth.height != clip.height:
             raise ValueError("Smooth clip sizes must match the source clip's!")
 
-        smoothed = smooth
+        smoothed = get_y(smooth) if planes == [0] else smooth
 
     # Post-Process: Contra-Sharpening
     if contra:
