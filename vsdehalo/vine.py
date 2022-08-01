@@ -108,7 +108,7 @@ def smooth_clip(
     resampled = Bicubic(b=-sharp, c=c).scale(upsampled, work_clip.width, work_clip.height)
 
     if fast:
-        resampled = contrasharpening_dehalo(resampled, work_clip, 2.5, planes)
+        resampled = contrasharpening_dehalo(resampled, work_clip, 2.5, planes=planes)
 
     clean = knl_means_cl(work_clip, strength, 0, sr, 0, knl_channels)
 

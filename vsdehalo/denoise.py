@@ -242,7 +242,7 @@ def HQDeringmod(
         if isinstance(contra, int):
             smoothed = contrasharpening(smoothed, work_clip, contra, 13, planes)
         else:
-            smoothed = contrasharpening_dehalo(smoothed, work_clip, contra, planes)
+            smoothed = contrasharpening_dehalo(smoothed, work_clip, contra, planes=planes)
 
     # Post-Process: Repairing
     if set(rep_dr) != {0}:
