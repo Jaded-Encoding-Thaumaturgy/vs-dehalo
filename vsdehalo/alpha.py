@@ -220,26 +220,52 @@ def fine_dehalo2(
     mask_h = mask_v = None
 
     # intended to be reversed
-    if mode in {ConvMode.SQUARE, ConvMode.VERTICAL}:
-        mask_h = work_clip.std.Convolution([1, 2, 1, 0, 0, 0, -1, -2, -1], None, 4, planes, False)
+    if aka_expr_available:
 
-    if mode in {ConvMode.SQUARE, ConvMode.HORIZONTAL}:
-        mask_v = work_clip.std.Convolution([1, 0, -1, 2, 0, -2, 1, 0, -1], None, 4, planes, False)
+        h_mexpr, v_mexpr = [
+            f'{coord}  + + + + + 4 / abs' for coord in [
+                'x[-1,-1] x[0,-1] 2 * x[1,-1] x[-1,1] -1 * x[0,1] -2 * x[1,1] -1 *',
+                'x[-1,-1] x[1,-1] -1 * x[-1,0] 2 * x[1,0] -2 * x[-1,1] x[1,1] -1 *'
+            ]
+        ]
+
+        if mode == ConvMode.SQUARE:
+            do_mh = do_mv = True
+        else:
+            do_mh, do_mv = [
+                mode == m for m in {ConvMode.HORIZONTAL, ConvMode.VERTICAL}
+            ]
+
+        mask_h, mask_v = [
+            norm_expr(
+                work_clip, f"{mexpr} 3 * {do_om and f'{omexpr} -' or ''} {'0 1 clamp' if is_float else ''}", planes
+            ) if do_m else None
+            for mexpr, do_m, do_om, omexpr in [
+                (h_mexpr, do_mh, do_mv, v_mexpr),
+                (v_mexpr, do_mv, do_mh, h_mexpr)
+            ]
+        ]
+    else:
+        if mode in {ConvMode.SQUARE, ConvMode.VERTICAL}:
+            mask_h = work_clip.std.Convolution([1, 2, 1, 0, 0, 0, -1, -2, -1], None, 4, planes, False)
+
+        if mode in {ConvMode.SQUARE, ConvMode.HORIZONTAL}:
+            mask_v = work_clip.std.Convolution([1, 0, -1, 2, 0, -2, 1, 0, -1], None, 4, planes, False)
+
+        if mask_h and mask_v:
+            mask_h = norm_expr([mask_h, mask_v], 'x 3 * y -', planes)
+            mask_v = norm_expr([mask_v, mask_h], 'x 3 * y -', planes)
+        elif mask_h:
+            mask_h = norm_expr(mask_h, 'x 3 *', planes)
+        elif mask_v:
+            mask_v = norm_expr(mask_v, 'x 3 *', planes)
+
+        if is_float:
+            mask_h = mask_h and mask_h.std.Limiter(planes=planes)
+            mask_v = mask_v and mask_v.std.Limiter(planes=planes)
 
     fix_h = work_clip.std.Convolution([-1, -2, 0, 0, 40, 0, 0, -2, -1], mode=ConvMode.HORIZONTAL)
     fix_v = work_clip.std.Convolution([-2, -1, 0, 0, 40, 0, 0, -1, -2], mode=ConvMode.VERTICAL)
-
-    if mask_h and mask_v:
-        mask_h = norm_expr([mask_h, mask_v], 'x 3 * y -', planes)
-        mask_v = norm_expr([mask_v, mask_h], 'x 3 * y -', planes)
-    elif mask_h:
-        mask_h = norm_expr(mask_h, 'x 3 *', planes)
-    elif mask_v:
-        mask_v = norm_expr(mask_v, 'x 3 *', planes)
-
-    if is_float:
-        mask_h = mask_h and mask_h.std.Limiter(planes=planes)
-        mask_v = mask_v and mask_v.std.Limiter(planes=planes)
 
     mask_h, mask_v = [
         masks.grow_mask(mask, radius, 1.8, planes, coordinates=coord) if mask else None
