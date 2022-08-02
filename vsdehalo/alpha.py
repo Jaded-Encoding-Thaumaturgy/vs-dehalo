@@ -185,16 +185,18 @@ def fine_dehalo(
 
 def fine_dehalo2(
     clip: vs.VideoNode, mode: ConvMode = ConvMode.SQUARE,
-    radius: int = 2, dark: bool = True, planes: PlanesT = 0, show_mask: bool = False
+    radius: int = 2, dark: bool | None = True, planes: PlanesT = 0, show_mask: bool = False
 ) -> vs.VideoNode:
     """
     Halo removal function for 2nd order halos.
 
     :param clip:        Source clip.
-    :param mode:        Horizontal/Vertical or both way.
+    :param mode:        Horizontal/Vertical or both ways.
     :param radius:      Radius for mask growing.
+    :param dark:        Whether to filter for dark or bright haloing.
+                        None for disable merging with source clip.
     :param planes:      Planes to process.
-    :param show_mask:    Whether to return the computed mask.
+    :param show_mask:   Whether to return the computed mask.
 
     :return:            Dehaloed clip.
     """
@@ -206,7 +208,6 @@ def fine_dehalo2(
     planes = normalise_planes(clip, planes)
 
     is_float = clip.format.sample_type == vs.FLOAT
-    peak = get_peak_value(clip)
 
     work_clip, *chroma = split(clip) if planes == [0] else (clip, )
 
@@ -214,9 +215,8 @@ def fine_dehalo2(
 
     # intended to be reversed
     if aka_expr_available:
-
         h_mexpr, v_mexpr = [
-            [ExprOp.convolution('x', coord, None, 4, False), ExprOp.clamp(0, peak)]
+            ExprOp.convolution('x', coord, None, 4, False)
             for coord in [
                 [[1, 2, 1], [0, 0, 0], [-1, -2, -1]],
                 [[1, 0, -1], [2, 0, -2], [1, 0, -1]]
@@ -224,13 +224,13 @@ def fine_dehalo2(
         ]
 
         if mode == ConvMode.SQUARE:
-            do_mh = do_mv = True
+            do_mv = do_mh = True
         else:
-            do_mh, do_mv = [
+            do_mv, do_mh = [
                 mode == m for m in {ConvMode.HORIZONTAL, ConvMode.VERTICAL}
             ]
 
-        mask_args = (h_mexpr, do_mh, do_mv, v_mexpr)
+        mask_args = (h_mexpr, do_mv, do_mh, v_mexpr)
 
         mask_h, mask_v = [
             norm_expr(work_clip, [
@@ -257,8 +257,15 @@ def fine_dehalo2(
             mask_h = mask_h and mask_h.std.Limiter(planes=planes)
             mask_v = mask_v and mask_v.std.Limiter(planes=planes)
 
-    fix_h = work_clip.std.Convolution([-1, -2, 0, 0, 40, 0, 0, -2, -1], mode=ConvMode.HORIZONTAL)
-    fix_v = work_clip.std.Convolution([-2, -1, 0, 0, 40, 0, 0, -1, -2], mode=ConvMode.VERTICAL)
+    fix_h, fix_v = [
+        norm_expr(work_clip, ExprOp.convolution('x', coord, mode=mode), planes)
+        if aka_expr_available else
+        work_clip.std.Convolution(coord, planes=planes, mode=mode)
+        for coord, mode in [
+            ([-1, -2, 0, 0, 40, 0, 0, -2, -1], ConvMode.HORIZONTAL),
+            ([-2, -1, 0, 0, 40, 0, 0, -1, -2], ConvMode.VERTICAL)
+        ]
+    ]
 
     mask_h, mask_v = [
         masks.grow_mask(mask, radius, 1.8, planes, coordinates=coord) if mask else None
@@ -279,9 +286,8 @@ def fine_dehalo2(
 
         return ret_mask
 
-    op = ExprOp.MAX if dark else ExprOp.MIN
-
     dehaloed = work_clip
+    op = '' if dark is None else ExprOp.MAX if dark else ExprOp.MIN
 
     if aka_expr_available and mask_h and mask_v and clip.format.sample_type is vs.FLOAT:
         dehaloed = norm_expr(
@@ -292,7 +298,8 @@ def fine_dehalo2(
             if mask:
                 dehaloed = dehaloed.std.MaskedMerge(fix, mask)
 
-        dehaloed = combine([work_clip, dehaloed], op)
+        if op:
+            dehaloed = combine([work_clip, dehaloed], ExprOp(op))
 
     if not chroma:
         return dehaloed
