@@ -163,11 +163,11 @@ def fine_dehalo(
     # parts sticking to the edges could be missed.
     # Also clamp to legal ranges
     mask = box_blur(mask, planes=planes)
-    
+
     if aka_expr_available:
         clamp_expr = f'0 {peak} clamp'
     else:
-       clamp_expr = f'0 max {peak} min'
+        clamp_expr = f'0 max {peak} min'
 
     mask = norm_expr(mask, f'x 2 * {clamp_expr}', planes)
 
@@ -206,6 +206,7 @@ def fine_dehalo2(
     planes = normalise_planes(clip, planes)
 
     is_float = clip.format.sample_type == vs.FLOAT
+    peak = get_peak_value(clip)
 
     work_clip, *chroma = split(clip) if planes == [0] else (clip, )
 
@@ -215,9 +216,10 @@ def fine_dehalo2(
     if aka_expr_available:
 
         h_mexpr, v_mexpr = [
-            f'{coord}  + + + + + 4 / abs' for coord in [
-                'x[-1,-1] x[0,-1] 2 * x[1,-1] x[-1,1] -1 * x[0,1] -2 * x[1,1] -1 *',
-                'x[-1,-1] x[1,-1] -1 * x[-1,0] 2 * x[1,0] -2 * x[-1,1] x[1,1] -1 *'
+            [ExprOp.convolution('x', coord, None, 4, False), ExprOp.clamp(0, peak)]
+            for coord in [
+                [[1, 2, 1], [0, 0, 0], [-1, -2, -1]],
+                [[1, 0, -1], [2, 0, -2], [1, 0, -1]]
             ]
         ]
 
@@ -228,14 +230,13 @@ def fine_dehalo2(
                 mode == m for m in {ConvMode.HORIZONTAL, ConvMode.VERTICAL}
             ]
 
+        mask_args = (h_mexpr, do_mh, do_mv, v_mexpr)
+
         mask_h, mask_v = [
-            norm_expr(
-                work_clip, f"{mexpr} 3 * {do_om and f'{omexpr} -' or ''} {'0 1 clamp' if is_float else ''}", planes
-            ) if do_m else None
-            for mexpr, do_m, do_om, omexpr in [
-                (h_mexpr, do_mh, do_mv, v_mexpr),
-                (v_mexpr, do_mv, do_mh, h_mexpr)
-            ]
+            norm_expr(work_clip, [
+                mexpr, 3, ExprOp.MUL, [omexpr, ExprOp.SUB] if do_om else None, ExprOp.clamp(0, 1) if is_float else None
+            ], planes) if do_m else None
+            for mexpr, do_m, do_om, omexpr in [mask_args, mask_args[::-1]]
         ]
     else:
         if mode in {ConvMode.SQUARE, ConvMode.VERTICAL}:
