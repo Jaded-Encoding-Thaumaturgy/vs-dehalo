@@ -33,7 +33,7 @@ def fine_dehalo(
     thmi: float = 80.0, thma: float = 128.0,
     thlimi: float = 50.0, thlima: float = 100.0,
     ss: float = 1.25,
-    contra: float | bool = 0.0, excl: bool = True,
+    contra: int | float | bool = 0.0, excl: bool = True,
     edgeproc: float = 0.0, planes: PlanesT = 0,
     edgemask: EdgeDetect = Robinson3(), show_mask: int = False
 ) -> vs.VideoNode:
@@ -53,8 +53,8 @@ def fine_dehalo(
     :param thlimi:      Minimum limiting threshold; includes more edges than previously, but ignores simple details.
     :param thlima:      Maximum limiting threshold; includes more edges than previously, but ignores simple details.
     :param ss:          Supersampling factor, to avoid creation of aliasing, defaults to 1.25
-    :param contra:      Contrasharpening. If True, will use :py:func:`contrasharpening`
-                        otherwise use :py:func:`contrasharpening_fine_dehalo`
+    :param contra:      Contrasharpening. If True or int, will use :py:func:`contrasharpening`
+                        otherwise uses :py:func:`contrasharpening_fine_dehalo` with specified level.
     :param excl:        If True, add an addionnal step to exclude edges close to each other
     :param edgeproc:    If > 0, it will add the edgemask to the processing, defaults to 0.0
     :param edgemask:    Internal mask used for detecting the edges, defaults to Robinson3()
@@ -87,8 +87,7 @@ def fine_dehalo(
     planes = normalise_planes(clip, planes)
 
     ry = rx if ry is None else ry
-    rx_i = cround(rx)
-    ry_i = cround(ry)
+    rx_i, ry_i = cround(rx), cround(ry)
 
     work_clip, *chroma = split(clip) if planes == [0] else (clip, )
 
@@ -102,7 +101,7 @@ def fine_dehalo(
     if contra:
         if isinstance(contra, (int, bool)):
             dehaloed = contrasharpening(
-                dehaloed, work_clip, contra if isinstance(contra, int) else None, planes=planes
+                dehaloed, work_clip, None if contra is True else contra, planes=planes
             )
         else:
             dehaloed = contrasharpening_dehalo(dehaloed, work_clip, contra, planes=planes)
@@ -163,25 +162,18 @@ def fine_dehalo(
     # Smooth again and amplify to grow the mask a bit, otherwise the halo
     # parts sticking to the edges could be missed.
     # Also clamp to legal ranges
-    mask = mask.std.Convolution([1] * 9, planes=planes)
-    mask = norm_expr(mask, f'x 2 * 0 max {peak} min', planes)
+    mask = box_blur(mask, planes=planes)
+    
+    if aka_expr_available:
+        clamp_expr = f'0 {peak} clamp'
+    else:
+       clamp_expr = f'0 max {peak} min'
+
+    mask = norm_expr(mask, f'x 2 * {clamp_expr}', planes)
 
     # Masking #
     if show_mask:
-        if show_mask == 1:
-            return mask
-        if show_mask == 2:
-            return shrink
-        if show_mask == 3:
-            return edges
-        if show_mask == 4:
-            return strong
-        if show_mask == 5:
-            return light
-        if show_mask == 6:
-            return large
-        if show_mask == 7:
-            return shr_med
+        return [mask, shrink, edges, strong, light, large, shr_med][show_mask - 1]
 
     y_merge = work_clip.std.MaskedMerge(dehaloed, mask, planes)
 
