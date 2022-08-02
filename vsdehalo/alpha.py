@@ -3,14 +3,16 @@ from __future__ import annotations
 from functools import partial
 
 import vapoursynth as vs
-from vsexprtools import PlanesT, aka_expr_available, clamp, cround, mod4, norm_expr_planes, normalise_planes
+from vsexprtools import (
+    ExprOp, PlanesT, aka_expr_available, clamp, combine, cround, mod4, norm_expr, norm_expr_planes, normalise_planes
+)
 from vskernels import BSpline, Lanczos, Mitchell
 from vsmask.edge import EdgeDetect, Robinson3
 from vsmask.util import XxpandMode, expand, inpand
 from vsrgtools import ConvMode, box_blur, contrasharpening, contrasharpening_dehalo, repair
+from vsutil import Range as CRange
 from vsutil import (
-    Range as CRange, disallow_variable_format, disallow_variable_resolution, get_peak_value, get_y, join, scale_value,
-    split
+    disallow_variable_format, disallow_variable_resolution, get_peak_value, get_y, join, scale_value, split
 )
 
 from . import masks
@@ -197,7 +199,7 @@ def fine_dehalo(
 
 def fine_dehalo2(
     clip: vs.VideoNode, mode: ConvMode = ConvMode.SQUARE,
-    radius: int = 2, planes: PlanesT = 0, show_mask: bool = False
+    radius: int = 2, dark: bool = True, planes: PlanesT = 0, show_mask: bool = False
 ) -> vs.VideoNode:
     """
     Halo removal function for 2nd order halos.
@@ -215,14 +217,11 @@ def fine_dehalo2(
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise ValueError('fine_dehalo2: format not supported')
 
-    peak = get_peak_value(clip)
     planes = normalise_planes(clip, planes)
 
     is_float = clip.format.sample_type == vs.FLOAT
 
     work_clip, *chroma = split(clip) if planes == [0] else (clip, )
-
-    norm_expr = partial(norm_expr_planes, work_clip, planes=planes)
 
     mask_h = mask_v = None
 
@@ -237,12 +236,12 @@ def fine_dehalo2(
     fix_v = work_clip.std.Convolution([-2, -1, 0, 0, 40, 0, 0, -1, -2], mode=ConvMode.VERTICAL)
 
     if mask_h and mask_v:
-        mask_h = core.std.Expr([mask_h, mask_v], norm_expr('x 3 * y -'))
-        mask_v = core.std.Expr([mask_v, mask_h], norm_expr('x 3 * y -'))
+        mask_h = norm_expr([mask_h, mask_v], 'x 3 * y -', planes)
+        mask_v = norm_expr([mask_v, mask_h], 'x 3 * y -', planes)
     elif mask_h:
-        mask_h = mask_h.std.Expr(norm_expr('x 3 *'))
+        mask_h = norm_expr(mask_h, 'x 3 *', planes)
     elif mask_v:
-        mask_v = mask_v.std.Expr(norm_expr('x 3 *'))
+        mask_v = norm_expr(mask_v, 'x 3 *', planes)
 
     if is_float:
         mask_h = mask_h and mask_h.std.Limiter(planes=planes)
@@ -261,27 +260,31 @@ def fine_dehalo2(
 
     if show_mask:
         if mask_h and mask_v:
-            return core.std.Expr([mask_h, mask_v], 'x y max')
-        else:
-            assert (mask := mask_h or mask_v)
-            return mask
+            return combine([mask_h, mask_v], ExprOp.MAX)
+
+        assert (ret_mask := mask_h or mask_v)
+
+        return ret_mask
+
+    op = ExprOp.MAX if dark else ExprOp.MIN
+
+    dehaloed = work_clip
+
+    if aka_expr_available and mask_h and mask_v and clip.format.sample_type is vs.FLOAT:
+        dehaloed = norm_expr(
+            [work_clip, fix_h, fix_v, mask_h, mask_v, clip], f'x 1 a - * y a * + 1 b - * z b * + c {op}', planes
+        )
     else:
-        if aka_expr_available and mask_h and mask_v:
-            dehaloed = core.akarin.Expr(
-                [work_clip, fix_h, fix_v, mask_h, mask_v],
-                f'a {peak} / MH! b {peak} / MV! x 1 MH@ - * y MH@ * + 1 MV@ - * z MV@ * +'
-            )
-        else:
-            dehaloed = work_clip
-            if mask_v:
-                dehaloed = dehaloed.std.MaskedMerge(fix_h, mask_v)
-            if mask_h:
-                dehaloed = dehaloed.std.MaskedMerge(fix_v, mask_h)
+        for fix, mask in [(fix_h, mask_v), (fix_v, mask_h)]:
+            if mask:
+                dehaloed = dehaloed.std.MaskedMerge(fix, mask)
 
-    if chroma:
-        return join([dehaloed, *chroma], clip.format.color_family)
+        dehaloed = combine([work_clip, dehaloed], op)
 
-    return dehaloed
+    if not chroma:
+        return dehaloed
+
+    return join([dehaloed, *chroma], clip.format.color_family)
 
 
 @disallow_variable_format
