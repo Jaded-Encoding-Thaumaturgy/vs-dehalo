@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-from functools import partial
-
 import vapoursynth as vs
-from vsexprtools import (
-    ExprOp, PlanesT, aka_expr_available, clamp, combine, cround, mod4, norm_expr, norm_expr_planes, normalise_planes
-)
+from vsexprtools import ExprOp, PlanesT, aka_expr_available, clamp, combine, cround, mod4, norm_expr, normalise_planes
 from vskernels import BSpline, Lanczos, Mitchell
 from vsmask.edge import EdgeDetect, Robinson3
 from vsmask.util import XxpandMode, expand, inpand
@@ -96,8 +92,6 @@ def fine_dehalo(
 
     work_clip, *chroma = split(clip) if planes == [0] else (clip, )
 
-    norm_expr = partial(norm_expr_planes, work_clip, planes=planes)
-
     if ref:
         dehaloed = get_y(ref) if planes == [0] else ref
     else:
@@ -118,7 +112,7 @@ def fine_dehalo(
     edges = edgemask.edgemask(work_clip)
 
     # Keeps only the sharpest edges (line edges)
-    strong = edges.std.Expr(norm_expr(f'x {thmi} - {thma - thmi} / {peak} *'))
+    strong = norm_expr(edges, f'x {thmi} - {thma - thmi} / {peak} *', planes)
 
     # Extends them to include the potential halos
     large = expand(strong, rx_i, ry_i, planes=planes)
@@ -131,7 +125,7 @@ def fine_dehalo(
     # these zones from the halo removal.
 
     # Includes more edges than previously, but ignores simple details
-    light = edges.std.Expr(norm_expr(f'x {thlimi} - {thlima - thlimi} / {peak} *'))
+    light = norm_expr(edges, f'x {thlimi} - {thlima - thlimi} / {peak} *', planes)
 
     # To build the exclusion zone, we make grow the edge mask, then shrink
     # it to its original shape. During the growing stage, close adjacent
@@ -144,7 +138,7 @@ def fine_dehalo(
     # end up with large areas of dark grey after shrinking. To avoid this,
     # we amplify and saturate the mask here (actually we could even
     # binarize it).
-    shrink = shrink.std.Expr(norm_expr('x 4 *'))
+    shrink = norm_expr(shrink, 'x 4 *', planes)
     shrink = inpand(shrink, rx_i, rx_i, XxpandMode.ELLIPSE, planes=planes)
 
     # This mask is almost binary, which will produce distinct
@@ -156,21 +150,21 @@ def fine_dehalo(
     # Previous mask may be a bit weak on the pure edge side, so we ensure
     # that the main edges are really excluded. We do not want them to be
     # smoothed by the halo removal.
-    shr_med = core.std.Expr([strong, shrink], norm_expr('x y max')) if excl else strong
+    shr_med = combine([strong, shrink], ExprOp.MAX, planes=planes) if excl else strong
 
     # Substracts masks and amplifies the difference to be sure we get 255
     # on the areas to be processed.
-    mask = core.std.Expr([large, shr_med], norm_expr('x y - 2 *'))
+    mask = norm_expr([large, shr_med], 'x y - 2 *', planes)
 
     # If edge processing is required, adds the edgemask
     if edgeproc > 0:
-        mask = core.std.Expr([mask, strong], norm_expr(f'x y {edgeproc} 0.66 * * +'))
+        mask = norm_expr([mask, strong], f'x y {edgeproc} 0.66 * * +', planes)
 
     # Smooth again and amplify to grow the mask a bit, otherwise the halo
     # parts sticking to the edges could be missed.
     # Also clamp to legal ranges
     mask = mask.std.Convolution([1] * 9, planes=planes)
-    mask = mask.std.Expr(norm_expr(f'x 2 * 0 max {peak} min'))
+    mask = norm_expr(mask, f'x 2 * 0 max {peak} min', planes)
 
     # Masking #
     if show_mask:
@@ -325,18 +319,15 @@ def dehalo_alpha(
     dehalo = mitchell.scale(work_clip, mod4(clip.width / rx), mod4(clip.height / ry))
     dehalo = bspline.scale(dehalo, clip.width, clip.height)
 
-    norm_expr = partial(norm_expr_planes, work_clip, planes=planes)
+    org_minmax = norm_expr([work_clip.std.Maximum(planes), work_clip.std.Minimum(planes)], 'x y -', planes)
+    dehalo_minmax = norm_expr([dehalo.std.Maximum(planes), dehalo.std.Minimum(planes)], 'x y -', planes)
 
-    org_minmax = core.std.Expr([work_clip.std.Maximum(planes), work_clip.std.Minimum(planes)], norm_expr('x y -'))
-    dehalo_minmax = core.std.Expr([dehalo.std.Maximum(planes), dehalo.std.Minimum(planes)], norm_expr('x y -'))
-
-    mask = core.std.Expr(
-        [org_minmax, dehalo_minmax], norm_expr(
-            f'x 0 = 1.0 x y - x / ? {lowsens / 255} - x {peak} / 256 255 / + 512 255 / / {highsens / 100} + * '
-            # f'{lowsens / 255} - x {peak} / 1.003921568627451 + 2.007843137254902 / {highsens / 100} + * '
-            # f'{lowsens / 255} - x {peak} / 0.498046862745098 * 0.5 + {highsens / 100} + * '
-            f'0.0 max 1.0 min {peak} *',
-        )
+    mask = norm_expr(
+        [org_minmax, dehalo_minmax],
+        f'x 0 = 1.0 x y - x / ? {lowsens / 255} - x {peak} / 256 255 / + 512 255 / / {highsens / 100} + * '
+        # f'{lowsens / 255} - x {peak} / 1.003921568627451 + 2.007843137254902 / {highsens / 100} + * '
+        # f'{lowsens / 255} - x {peak} / 0.498046862745098 * 0.5 + {highsens / 100} + * '
+        f'0.0 max 1.0 min {peak} *', planes
     )
 
     sig_mask = bool(sigma_mask)
@@ -352,20 +343,20 @@ def dehalo_alpha(
 
     if ss > 1:
         w, h = mod4(clip.width * ss), mod4(clip.height * ss)
-        ss_clip = core.std.Expr([
+        ss_clip = norm_expr([
             Lanczos(3).scale(work_clip, w, h),
             mitchell.scale(dehalo.std.Maximum(), w, h),
             mitchell.scale(dehalo.std.Minimum(), w, h)
-        ], norm_expr('x y min z max'))
+        ], 'x y min z max', planes)
         dehalo = Lanczos(3).scale(ss_clip, clip.width, clip.height)
     else:
         dehalo = repair(work_clip, dehalo, [int(i in planes) for i in range(clip.format.num_planes)])
 
-    dehalo = core.std.Expr(
-        [work_clip, dehalo], norm_expr(f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?')
+    dehalo = norm_expr(
+        [work_clip, dehalo], f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?', planes
     )
 
-    if chroma:
-        return join([dehalo, *chroma], clip.format.color_family)
+    if not chroma:
+        return dehalo
 
-    return dehalo
+    return join([dehalo, *chroma], clip.format.color_family)
