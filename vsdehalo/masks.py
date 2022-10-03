@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-import vapoursynth as vs
-from vsexprtools import PlanesT, norm_expr
+from vsexprtools import norm_expr
 from vsmask.edge import TriticalTCanny
-from vsrgtools.util import iterate, wmean_matrix
-from vsutil import disallow_variable_format, disallow_variable_resolution
+from vsrgtools.util import wmean_matrix
+from vstools import PlanesT, core, disallow_variable_format, disallow_variable_resolution, iterate, vs
 
 __all__ = [
     # Masking kernels
@@ -16,10 +15,7 @@ __all__ = [
     'top_hat', 'black_hat', 'outer_hat', 'inner_hat',
     # General functions
     'grow_mask'
-
 ]
-
-core = vs.core
 
 
 class TritSigmaTCanny(TriticalTCanny):
