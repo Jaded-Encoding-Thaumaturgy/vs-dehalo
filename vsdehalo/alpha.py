@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import vapoursynth as vs
-from vsexprtools import ExprOp, PlanesT, aka_expr_available, clamp, combine, cround, mod4, norm_expr, normalise_planes
+from vsexprtools import ExprOp, aka_expr_available, combine, norm_expr
 from vskernels import BSpline, Lanczos, Mitchell
 from vsmask.edge import EdgeDetect, Robinson3
 from vsmask.util import XxpandMode, expand, inpand
-from vsrgtools import ConvMode, box_blur, contrasharpening, contrasharpening_dehalo, repair
-from vsutil import Range as CRange
-from vsutil import (
-    disallow_variable_format, disallow_variable_resolution, get_peak_value, get_y, join, scale_value, split
+from vsrgtools import box_blur, contrasharpening, contrasharpening_dehalo, repair
+from vstools import (
+    ColorRange, ConvMode, PlanesT, clamp, cround, disallow_variable_format, disallow_variable_resolution,
+    get_peak_value, get_y, join, mod4, normalize_planes, scale_value, split, vs
 )
 
 from . import masks
@@ -16,11 +15,6 @@ from . import masks
 __all__ = [
     'fine_dehalo', 'fine_dehalo2', 'dehalo_alpha'
 ]
-
-core = vs.core
-
-bspline = BSpline()
-mitchell = Mitchell()
 
 
 @disallow_variable_format
@@ -79,12 +73,12 @@ def fine_dehalo(
         raise ValueError('fine_dehalo: Valid values for show_mask are 0–7!')
 
     thmi, thma, thlimi, thlima = [
-        scale_value(x, 8, clip.format.bits_per_sample, CRange.FULL)
+        scale_value(x, 8, clip.format.bits_per_sample, ColorRange.FULL)
         for x in [thmi, thma, thlimi, thlima]
     ]
 
     peak = get_peak_value(clip)
-    planes = normalise_planes(clip, planes)
+    planes = normalize_planes(clip, planes)
 
     ry = rx if ry is None else ry
     rx_i, ry_i = cround(rx), cround(ry)
@@ -205,7 +199,7 @@ def fine_dehalo2(
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise ValueError('fine_dehalo2: format not supported')
 
-    planes = normalise_planes(clip, planes)
+    planes = normalize_planes(clip, planes)
 
     is_float = clip.format.sample_type == vs.FLOAT
 
@@ -336,14 +330,14 @@ def dehalo_alpha(
         raise ValueError('dehalo_alpha: only GRAY and YUV formats are supported')
 
     peak = get_peak_value(clip)
-    planes = normalise_planes(clip, planes)
+    planes = normalize_planes(clip, planes)
 
     ry = rx if ry is None else ry
 
     work_clip, *chroma = split(clip) if planes == [0] else (clip, )
 
-    dehalo = mitchell.scale(work_clip, mod4(clip.width / rx), mod4(clip.height / ry))
-    dehalo = bspline.scale(dehalo, clip.width, clip.height)
+    dehalo = Mitchell.scale(work_clip, mod4(clip.width / rx), mod4(clip.height / ry))
+    dehalo = BSpline.scale(dehalo, clip.width, clip.height)
 
     org_minmax = norm_expr([work_clip.std.Maximum(planes), work_clip.std.Minimum(planes)], 'x y -', planes)
     dehalo_minmax = norm_expr([dehalo.std.Maximum(planes), dehalo.std.Minimum(planes)], 'x y -', planes)
@@ -371,8 +365,8 @@ def dehalo_alpha(
         w, h = mod4(clip.width * ss), mod4(clip.height * ss)
         ss_clip = norm_expr([
             Lanczos(3).scale(work_clip, w, h),
-            mitchell.scale(dehalo.std.Maximum(), w, h),
-            mitchell.scale(dehalo.std.Minimum(), w, h)
+            Mitchell.scale(dehalo.std.Maximum(), w, h),
+            Mitchell.scale(dehalo.std.Minimum(), w, h)
         ], 'x y min z max', planes)
         dehalo = Lanczos(3).scale(ss_clip, clip.width, clip.height)
     else:
