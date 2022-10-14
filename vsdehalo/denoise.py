@@ -2,24 +2,21 @@ from __future__ import annotations
 
 from functools import partial
 from math import ceil
-from typing import Any, Dict, Literal, Tuple, cast
+from typing import Any, Literal
 
-import vapoursynth as vs
 from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC, Prefilter
-from vsexprtools import PlanesT, norm_expr_planes, normalise_planes, normalise_seq
+from vsexprtools import norm_expr_planes
 from vsmask.edge import Prewitt
 from vsmask.util import expand, inpand
 from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair
-from vsutil import (
-    depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth, get_peak_value, get_y, iterate,
-    join, scale_value, split
+from vstools import (
+    PlanesT, core, depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth, get_peak_value,
+    get_y, iterate, join, normalize_planes, normalize_seq, scale_value, split, vs
 )
 
 __all__ = [
     'bidehalo', 'HQDeringmod'
 ]
-
-core = vs.core
 
 
 @disallow_variable_format
@@ -30,7 +27,7 @@ def bidehalo(
     sigma_final: float | None = None, radius_final: float | None = None,
     tr: int = 2, cuda: bool | Literal['rtc'] = False,
     planes: PlanesT = 0, matrix: int | vs.MatrixCoefficients | None = None,
-    bm3d_args: Dict[str, Any] | None = None, bilateral_args: Dict[str, Any] | None = None
+    bm3d_args: dict[str, Any] | None = None, bilateral_args: dict[str, Any] | None = None
 ) -> vs.VideoNode:
     """
     Simple dehalo function that uses ``bilateral`` and ``BM3D`` to remove bright haloing around edges.
@@ -81,7 +78,7 @@ def bidehalo(
     sigma_final = fallback(sigma_final, sigma / 3)
     radius_final = fallback(radius_final, radius)
 
-    planes = normalise_planes(clip, planes)
+    planes = normalize_planes(clip, planes)
 
     if matrix:
         clip = clip.std.SetFrameProp('_Matrix', int(matrix))
@@ -124,7 +121,7 @@ def bidehalo(
 @disallow_variable_resolution
 def HQDeringmod(
     clip: vs.VideoNode,
-    smooth: vs.VideoNode | Prefilter | Tuple[Prefilter, Prefilter] = Prefilter.MINBLUR1,
+    smooth: vs.VideoNode | Prefilter | tuple[Prefilter, Prefilter] = Prefilter.MINBLUR1,
     ringmask: vs.VideoNode | None = None,
     mrad: int = 1, msmooth: int = 1, minp: int = 1, mthr: int = 60, incedge: bool = False,
     thr: int = 12, elast: float = 2.0, darkthr: int | None = None,
@@ -192,7 +189,7 @@ def HQDeringmod(
 
     peak = get_peak_value(clip)
     bits = clip.format.bits_per_sample
-    planes = normalise_planes(clip, planes)
+    planes = normalize_planes(clip, planes)
     work_clip, *chroma = split(clip) if planes == [0] else (clip, )
     assert work_clip.format
 
@@ -209,9 +206,9 @@ def HQDeringmod(
 
     # Kernel: Smoothing
     if not isinstance(smooth, vs.VideoNode):
-        smoothy, smoothc = cast(Tuple[Prefilter, Prefilter], normalise_seq(smooth, 2))
+        smoothy, smoothc = normalize_seq(smooth, 2)
 
-        def _get_kwargs(pref: Prefilter) -> Dict[str, Any]:
+        def _get_kwargs(pref: Prefilter) -> dict[str, Any]:
             if pref != Prefilter.DFTTEST:
                 return kwargs
             return kwargs | dict(

@@ -5,16 +5,16 @@ from __future__ import annotations
 
 from functools import partial
 from math import log
-from typing import Any, Tuple
+from typing import Any
 
-import vapoursynth as vs
 from vsdenoise import CCDMode, CCDPoints, ChannelMode, MVTools, PelType, Prefilter, ccd, knl_means_cl
-from vsdenoise.utils import check_ref_clip
-from vsexprtools import PlanesT, norm_expr_planes, normalise_planes
+from vsexprtools import norm_expr_planes
 from vskernels import Bicubic
-from vskernels.types import Matrix
 from vsrgtools import contrasharpening_dehalo, gauss_blur, gauss_fmtc_blur, lehmer_diff_merge
-from vsutil import disallow_variable_format, disallow_variable_resolution, get_y, join, split
+from vstools import (
+    Matrix, PlanesT, check_ref_clip, core, disallow_variable_format, disallow_variable_resolution, get_y, join,
+    normalize_planes, split, vs
+)
 
 from . import masks
 from .alpha import fine_dehalo
@@ -22,8 +22,6 @@ from .alpha import fine_dehalo
 __all__ = [
     'super_clip', 'smooth_clip', 'dehalo'
 ]
-
-core = vs.core
 
 
 @disallow_variable_format
@@ -68,7 +66,7 @@ def smooth_clip(
         raise RuntimeError('vine.smooth_clip: cutoff must fall in (0, 100]!')
 
     csp = src.format.color_family
-    planes = normalise_planes(src, planes)
+    planes = normalize_planes(src, planes)
 
     if fast and csp == vs.GRAY:
         raise ValueError('vine.smooth_clip: fast=True is available only for YUV and RGB input!')
@@ -150,7 +148,7 @@ def smooth_clip(
 def dehalo(
     src: vs.VideoNode, smooth: vs.VideoNode | None = None,
     tr: int = 0, refine: int = 3, pel: int = 1, thSAD: int = 400,
-    super_clips: Tuple[vs.VideoNode | None, vs.VideoNode | None] = (None, None),
+    super_clips: tuple[vs.VideoNode | None, vs.VideoNode | None] = (None, None),
     planes: PlanesT = 0, mask: bool | vs.VideoNode = True
 ) -> vs.VideoNode:
     assert src.format
@@ -168,7 +166,7 @@ def dehalo(
         raise RuntimeError('vine.dehalo: sad has to be greater than 0!')
 
     csp = src.format.color_family
-    planes = normalise_planes(src, planes)
+    planes = normalize_planes(src, planes)
 
     if any(sclip and sclip.format and sclip.format.num_planes == 1 for sclip in super_clips):
         planes = [0]
