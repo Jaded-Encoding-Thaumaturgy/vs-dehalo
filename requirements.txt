@@ -3,4 +3,5 @@ vstools>=1.2.0
 vskernels>=2.1.0
 vsexprtools>=1.2.1
 vsrgtools>=1.1.0
+vsdenoise>=1.0.0
 vsmask>=0.4.0

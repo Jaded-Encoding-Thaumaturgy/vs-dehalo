@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any
 
 from vsexprtools import norm_expr
