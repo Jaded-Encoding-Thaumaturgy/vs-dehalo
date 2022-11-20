@@ -1,19 +1,22 @@
 from __future__ import annotations
 
 from vsexprtools import ExprOp, aka_expr_available, combine, norm_expr
-from vskernels import BSpline, Lanczos, Mitchell
+from vskernels import BSpline, Lanczos, Mitchell, Scaler, ScalerT
 from vsmask.edge import EdgeDetect, Robinson3
 from vsmask.util import XxpandMode, expand, inpand
 from vsrgtools import box_blur, contrasharpening, contrasharpening_dehalo, repair
 from vstools import (
-    ColorRange, ConvMode, PlanesT, clamp, cround, disallow_variable_format, disallow_variable_resolution,
-    get_peak_value, get_y, join, mod4, normalize_planes, scale_value, split, vs
+    ColorRange, ConvMode, FuncExceptT, PlanesT, check_variable, clamp, cround, disallow_variable_format,
+    disallow_variable_resolution, get_peak_value, get_y, join, mod4, normalize_planes, scale_value, split, vs,
+    InvalidColorFamilyError
 )
 
 from . import masks
 
 __all__ = [
-    'fine_dehalo', 'fine_dehalo2', 'dehalo_alpha'
+    'fine_dehalo',
+    'fine_dehalo2',
+    'dehalo_alpha'
 ]
 
 
@@ -309,25 +312,39 @@ def dehalo_alpha(
     darkstr: float = 0.0, brightstr: float = 1.0,
     lowsens: float = 50.0, highsens: float = 50.0,
     sigma_mask: float = 0.0, ss: float = 1.5,
-    planes: PlanesT = 0, show_mask: bool = False
+    planes: PlanesT = 0, show_mask: bool = False, mask_radius: int = 1,
+    downscaler: ScalerT = Mitchell, upscaler: ScalerT = BSpline,
+    supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell,
+    func: FuncExceptT | None = None
 ) -> vs.VideoNode:
     """
-    Reduce halo artifacts by nuking everything around edges (and also the edges actually)
-    :param clip:            Source clip
-    :param rx:              Horizontal radius for halo removal, defaults to 2.0
-    :param ry:              Vertical radius for halo removal, defaults to 2.0
-    :param darkstr:         Strength factor for dark halos, defaults to 1.0
-    :param brightstr:       Strength factor for bright halos, defaults to 1.0
-    :param lowsens:         Sensitivity setting, defaults to 50
-    :param highsens:        Sensitivity setting, defaults to 50
-    :param sigma_mask:      Blurring strength for the mask, defaults to 0.25
-    :param ss:              Supersampling factor, to avoid creation of aliasing., defaults to 1.5
-    :return:                Dehaloed clip
-    """
-    assert clip.format
+    Reduce halo artifacts by nuking everything around edges (and also the edges actually).
 
-    if clip.format.color_family not in {vs.GRAY, vs.YUV}:
-        raise ValueError('dehalo_alpha: only GRAY and YUV formats are supported')
+    :param clip:                Source clip.
+    :param rx:                  Horizontal radius for halo removal.
+    :param ry:                  Vertical radius for halo removal.
+    :param darkstr:             Strength factor for dark halos.
+    :param brightstr:           Strength factor for bright halos.
+    :param lowsens:             Sensitivity setting for lower bound.
+    :param highsens:            Sensitivity setting for higher bound.
+    :param sigma_mask:          Blurring strength for the mask.
+    :param ss:                  Supersampling factor, to avoid creation of aliasing.
+    :param planes:              Planes to process.
+    :param show_mask:           Whether to show the computed halo mask.
+    :param downscaler:          Scaler used to downscale the clip.
+    :param upscaler:            Scaler used to upscale the downscaled clip.
+    :param supersampler:        Scaler used to supersampler the rescaled clip to `ss` factor.
+    :param supersampler_ref:    Reference scaler used to clamp the supersampled clip. Has to be blurrier.
+    :param func:                Function from where this function was called.
+
+    :return:                    Dehaloed clip.
+    """
+
+    func = func or dehalo_alpha
+
+    assert check_variable(clip, func)
+
+    InvalidColorFamilyError.check(clip, (vs.GRAY, vs.YUV), func)
 
     peak = get_peak_value(clip)
     planes = normalize_planes(clip, planes)
@@ -336,17 +353,20 @@ def dehalo_alpha(
 
     work_clip, *chroma = split(clip) if planes == [0] else (clip, )
 
-    dehalo = Mitchell.scale(work_clip, mod4(clip.width / rx), mod4(clip.height / ry))
-    dehalo = BSpline.scale(dehalo, clip.width, clip.height)
+    downscaler = Scaler.ensure_obj(downscaler, func)
+    upscaler = Scaler.ensure_obj(upscaler, func)
+    supersampler = Scaler.ensure_obj(supersampler, func)
+    supersampler_ref = Scaler.ensure_obj(supersampler_ref, func)
 
-    org_minmax = norm_expr([work_clip.std.Maximum(planes), work_clip.std.Minimum(planes)], 'x y -', planes)
-    dehalo_minmax = norm_expr([dehalo.std.Maximum(planes), dehalo.std.Minimum(planes)], 'x y -', planes)
+    dehalo = downscaler.scale(work_clip, mod4(clip.width / rx), mod4(clip.height / ry))
+    dehalo = upscaler.scale(dehalo, clip.width, clip.height)
+
+    org_minmax = masks.gradient(work_clip, mask_radius, planes)
+    dehalo_minmax = masks.gradient(dehalo, mask_radius, planes)
 
     mask = norm_expr(
         [org_minmax, dehalo_minmax],
         f'x 0 = 1.0 x y - x / ? {lowsens / 255} - x {peak} / 256 255 / + 512 255 / / {highsens / 100} + * '
-        # f'{lowsens / 255} - x {peak} / 1.003921568627451 + 2.007843137254902 / {highsens / 100} + * '
-        # f'{lowsens / 255} - x {peak} / 0.498046862745098 * 0.5 + {highsens / 100} + * '
         f'0.0 max 1.0 min {peak} *', planes
     )
 
@@ -364,11 +384,11 @@ def dehalo_alpha(
     if ss > 1:
         w, h = mod4(clip.width * ss), mod4(clip.height * ss)
         ss_clip = norm_expr([
-            Lanczos(3).scale(work_clip, w, h),
-            Mitchell.scale(dehalo.std.Maximum(), w, h),
-            Mitchell.scale(dehalo.std.Minimum(), w, h)
+            supersampler.scale(work_clip, w, h),
+            supersampler_ref.scale(dehalo.std.Maximum(), w, h),
+            supersampler_ref.scale(dehalo.std.Minimum(), w, h)
         ], 'x y min z max', planes)
-        dehalo = Lanczos(3).scale(ss_clip, clip.width, clip.height)
+        dehalo = supersampler.scale(ss_clip, clip.width, clip.height)
     else:
         dehalo = repair(work_clip, dehalo, [int(i in planes) for i in range(clip.format.num_planes)])
 
