@@ -5,10 +5,11 @@ from vskernels import BSpline, Lanczos, Mitchell, Scaler, ScalerT
 from vsmask.edge import EdgeDetect, Robinson3
 from vsmask.util import XxpandMode, expand, inpand
 from vsrgtools import box_blur, contrasharpening, contrasharpening_dehalo, repair
+from vsrgtools.util import norm_rmode_planes
 from vstools import (
-    ColorRange, ConvMode, FuncExceptT, PlanesT, check_variable, clamp, cround, disallow_variable_format,
-    disallow_variable_resolution, get_peak_value, get_y, join, mod4, normalize_planes, scale_value, split, vs,
-    InvalidColorFamilyError
+    ColorRange, ConvMode, FuncExceptT, InvalidColorFamilyError, PlanesT, check_variable, clamp, cround,
+    disallow_variable_format, disallow_variable_resolution, fallback, get_peak_value, get_y, join, mod4,
+    normalize_planes, normalize_seq, scale_value, split, to_arr, vs
 )
 
 from . import masks
@@ -308,10 +309,10 @@ def fine_dehalo2(
 @disallow_variable_resolution
 def dehalo_alpha(
     clip: vs.VideoNode,
-    rx: float = 2.0, ry: float | None = None,
-    darkstr: float = 0.0, brightstr: float = 1.0,
-    lowsens: float = 50.0, highsens: float = 50.0,
-    sigma_mask: float = 0.0, ss: float = 1.5,
+    rx: float | list[float] = 2.0, ry: float | list[float] | None = None,
+    darkstr: float | list[float] = 0.0, brightstr: float | list[float] = 1.0,
+    lowsens: float | list[float] = 50.0, highsens: float | list[float] = 50.0,
+    sigma_mask: float = 0.0, ss: float | list[float] = 1.5,
     planes: PlanesT = 0, show_mask: bool = False, mask_radius: int = 1,
     downscaler: ScalerT = Mitchell, upscaler: ScalerT = BSpline,
     supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell,
@@ -349,25 +350,42 @@ def dehalo_alpha(
     peak = get_peak_value(clip)
     planes = normalize_planes(clip, planes)
 
-    ry = rx if ry is None else ry
+    ry = fallback(ry, rx)  # type: ignore
 
     work_clip, *chroma = split(clip) if planes == [0] else (clip, )
+    assert work_clip.format
 
     downscaler = Scaler.ensure_obj(downscaler, func)
     upscaler = Scaler.ensure_obj(upscaler, func)
     supersampler = Scaler.ensure_obj(supersampler, func)
     supersampler_ref = Scaler.ensure_obj(supersampler_ref, func)
 
-    dehalo = downscaler.scale(work_clip, mod4(clip.width / rx), mod4(clip.height / ry))
-    dehalo = upscaler.scale(dehalo, clip.width, clip.height)
+    def _rescale(clip: vs.VideoNode, rx: float, ry: float) -> vs.VideoNode:
+        return upscaler.scale(downscaler.scale(  # type: ignore
+            clip, mod4(clip.width / rx), mod4(clip.height / ry)
+        ), clip.width, clip.height)
+
+    rx, ry = normalize_seq(rx), normalize_seq(ry)  # type: ignore
+
+    if len(set(rx)) == len(set(ry)) == 1 or planes == [0] or work_clip.format.num_planes == 1:
+        rx, ry = rx[0], ry[0]
+
+    if isinstance(rx, list) or isinstance(ry, list):
+        dehalo = join([
+            _rescale(plane, rxp, ryp)
+            for plane, rxp, ryp in zip(split(work_clip), normalize_seq(rx), normalize_seq(ry))
+        ])
+    else:
+        dehalo = _rescale(work_clip, rx, ry)
 
     org_minmax = masks.gradient(work_clip, mask_radius, planes)
     dehalo_minmax = masks.gradient(dehalo, mask_radius, planes)
 
     mask = norm_expr(
         [org_minmax, dehalo_minmax],
-        f'x 0 = 1.0 x y - x / ? {lowsens / 255} - x {peak} / 256 255 / + 512 255 / / {highsens / 100} + * '
-        f'0.0 max 1.0 min {peak} *', planes
+        'x 0 = 1.0 x y - x / ? {lowsens} - x {peak} / 256 255 / + 512 255 / / {highsens} + * '
+        '0.0 max 1.0 min {peak} *', planes, peak=peak,
+        lowsens=[lo / 255 for lo in to_arr(lowsens)], highsens=[hi / 100 for hi in to_arr(highsens)]
     )
 
     sig_mask = bool(sigma_mask)
@@ -381,19 +399,35 @@ def dehalo_alpha(
 
     dehalo = dehalo.std.MaskedMerge(work_clip, mask, planes=planes)
 
-    if ss > 1:
-        w, h = mod4(clip.width * ss), mod4(clip.height * ss)
+    def _supersample(work_clip: vs.VideoNode, dehalo: vs.VideoNode, ss: float) -> vs.VideoNode:
+        if ss <= 1.0:
+            return repair(work_clip, dehalo, norm_rmode_planes(work_clip, 1, planes))
+
+        w, h = mod4(work_clip.width * ss), mod4(work_clip.height * ss)
         ss_clip = norm_expr([
-            supersampler.scale(work_clip, w, h),
-            supersampler_ref.scale(dehalo.std.Maximum(), w, h),
-            supersampler_ref.scale(dehalo.std.Minimum(), w, h)
+            supersampler.scale(work_clip, w, h),  # type: ignore
+            supersampler_ref.scale(dehalo.std.Maximum(), w, h),  # type: ignore
+            supersampler_ref.scale(dehalo.std.Minimum(), w, h)  # type: ignore
         ], 'x y min z max', planes)
-        dehalo = supersampler.scale(ss_clip, clip.width, clip.height)
+
+        return supersampler.scale(ss_clip, work_clip.width, work_clip.height)  # type: ignore
+
+    ss = normalize_seq(ss)
+
+    if len(set(ss)) == 1 or planes == [0] or work_clip.format.num_planes == 1:
+        ss = ss[0]
+
+    if isinstance(ss, list):
+        dehalo = join([
+            _supersample(work_clip, dehalo, ssp)
+            for wplane, dplane, ssp in zip(split(work_clip), split(dehalo), ss)
+        ])
     else:
-        dehalo = repair(work_clip, dehalo, [int(i in planes) for i in range(clip.format.num_planes)])
+        dehalo = _supersample(work_clip, dehalo, ss)
 
     dehalo = norm_expr(
-        [work_clip, dehalo], f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?', planes
+        [work_clip, dehalo], 'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?', planes,
+        darkstr=darkstr, brightstr=brightstr
     )
 
     if not chroma:
