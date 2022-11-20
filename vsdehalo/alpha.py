@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from vsaa import Nnedi3
 from vsexprtools import ExprOp, aka_expr_available, combine, norm_expr
-from vskernels import BSpline, Lanczos, Mitchell, Scaler, ScalerT
+from vskernels import BSpline, Lanczos, Mitchell, NoShift, Point, Scaler, ScalerT
 from vsmask.edge import EdgeDetect, Robinson3
 from vsmask.util import XxpandMode, expand, inpand
 from vsrgtools import box_blur, contrasharpening, contrasharpening_dehalo, repair
@@ -316,7 +317,8 @@ def dehalo_alpha(
     planes: PlanesT = 0, show_mask: bool = False, mask_radius: int = 1,
     downscaler: ScalerT = Mitchell, upscaler: ScalerT = BSpline,
     supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell,
-    func: FuncExceptT | None = None
+    pre_ss: int = 1.0, pre_supersampler: ScalerT = Nnedi3(0, shifter=NoShift),
+    pre_downscaler: ScalerT = Point, func: FuncExceptT | None = None
 ) -> vs.VideoNode:
     """
     Reduce halo artifacts by nuking everything around edges (and also the edges actually).
@@ -350,15 +352,23 @@ def dehalo_alpha(
     peak = get_peak_value(clip)
     planes = normalize_planes(clip, planes)
 
-    ry = fallback(ry, rx)  # type: ignore
-
-    work_clip, *chroma = split(clip) if planes == [0] else (clip, )
-    assert work_clip.format
-
     downscaler = Scaler.ensure_obj(downscaler, func)
     upscaler = Scaler.ensure_obj(upscaler, func)
     supersampler = Scaler.ensure_obj(supersampler, func)
     supersampler_ref = Scaler.ensure_obj(supersampler_ref, func)
+    pre_supersampler = Scaler.ensure_obj(pre_supersampler, func)
+    pre_downscaler = Scaler.ensure_obj(pre_downscaler, func)
+
+    ry = fallback(ry, rx)  # type: ignore
+
+    work_clip, *chroma = split(clip) if planes == [0] else (clip, )
+
+    if pre_ss > 1.0:
+        work_clip = pre_supersampler.scale(
+            work_clip, mod4(work_clip.width * pre_ss), mod4(work_clip.height * pre_ss)
+        )
+
+    assert work_clip.format
 
     def _rescale(clip: vs.VideoNode, rx: float, ry: float) -> vs.VideoNode:
         return upscaler.scale(downscaler.scale(  # type: ignore
@@ -429,6 +439,9 @@ def dehalo_alpha(
         [work_clip, dehalo], 'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?', planes,
         darkstr=darkstr, brightstr=brightstr
     )
+
+    if (dehalo.width, dehalo.height) != (clip.width, clip.height):
+        dehalo = pre_downscaler.scale(work_clip, clip.width, clip.height)
 
     if not chroma:
         return dehalo
