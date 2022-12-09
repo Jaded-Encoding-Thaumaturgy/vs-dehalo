@@ -35,7 +35,7 @@ def fine_dehalo(
     thmi: float = 80.0, thma: float = 128.0,
     thlimi: float = 50.0, thlima: float = 100.0,
     ss: float = 1.25,
-    contra: int | float | bool = 0.0, excl: bool = True,
+    contra: int | float | bool = 0.0, exclude: bool = True,
     edgeproc: float = 0.0, planes: PlanesT = 0,
     edgemask: EdgeDetect = Robinson3(), show_mask: int = False,
     func: FuncExceptT | None = None
@@ -57,7 +57,7 @@ def fine_dehalo(
     :param ss:          Supersampling factor, to avoid creation of aliasing, defaults to 1.25
     :param contra:      Contrasharpening. If True or int, will use :py:func:`contrasharpening`
                         otherwise uses :py:func:`contrasharpening_fine_dehalo` with specified level.
-    :param excl:        If True, add an addionnal step to exclude edges close to each other
+    :param exclude:     If True, add an addionnal step to exclude edges close to each other
     :param edgeproc:    If > 0, it will add the edgemask to the processing, defaults to 0.0
     :param edgemask:    Internal mask used for detecting the edges, defaults to Robinson3()
     :param show_mask:    1 - 7
@@ -140,7 +140,7 @@ def fine_dehalo(
     # Previous mask may be a bit weak on the pure edge side, so we ensure
     # that the main edges are really excluded. We do not want them to be
     # smoothed by the halo removal.
-    shr_med = combine([strong, shrink], ExprOp.MAX, planes=planes) if excl else strong
+    shr_med = combine([strong, shrink], ExprOp.MAX, planes=planes) if exclude else strong
 
     # Substracts masks and amplifies the difference to be sure we get 255
     # on the areas to be processed.
