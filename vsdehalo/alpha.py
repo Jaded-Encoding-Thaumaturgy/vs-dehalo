@@ -325,16 +325,20 @@ def dehalo_alpha(
     :param ry:                  Vertical radius for halo removal.
     :param darkstr:             Strength factor for dark halos.
     :param brightstr:           Strength factor for bright halos.
-    :param lowsens:             Sensitivity setting for lower bound.
-    :param highsens:            Sensitivity setting for higher bound.
+    :param lowsens:             Sensitivity setting for defining how weak the dehalo has to be to get fully accepted.
+    :param highsens:            Sensitivity setting for define how strong the dehalo has to be to get fully discarded.
     :param sigma_mask:          Blurring strength for the mask.
     :param ss:                  Supersampling factor, to avoid creation of aliasing.
     :param planes:              Planes to process.
     :param show_mask:           Whether to show the computed halo mask.
+    :param mask_radius:         Mask expanding radius with ``gradient``.
     :param downscaler:          Scaler used to downscale the clip.
     :param upscaler:            Scaler used to upscale the downscaled clip.
     :param supersampler:        Scaler used to supersampler the rescaled clip to `ss` factor.
     :param supersampler_ref:    Reference scaler used to clamp the supersampled clip. Has to be blurrier.
+    :param pre_ss:              Supersampling rate used before anything else.
+    :param pre_supersampler:    Supersampler used for ``pre_ss``.
+    :param pre_downscaler:      Downscaler used for undoing the upscaling done by ``pre_supersampler``.
     :param func:                Function from where this function was called.
 
     :return:                    Dehaloed clip.
