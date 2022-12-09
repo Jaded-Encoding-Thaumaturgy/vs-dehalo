@@ -403,34 +403,33 @@ def dehalo_alpha(
 
     iterations = max([(len(x) if isinstance(x, tuple) else 1) for x in values])
 
-    values_norm: list[tuple[float | list[float], ...]] = [
-        (*x, *((x[-1], ) * (len(x) - iterations))) if isinstance(x, tuple) else ((x, ) * iterations)  # type: ignore
-        for x in values
-    ]
+    values_norm: list[tuple[list[float], ...]] = zip(*[  # type: ignore[assignment]
+        tuple(normalize_seq(x) for x in y)
+        for y in [
+            (*x, *((x[-1], ) * (len(x) - iterations))) if isinstance(x, tuple) else ((x, ) * iterations)
+            for x in values
+        ]
+    ])
 
-    for rx_i, ry_i, darkstr_i, brightstr_i, lowsens_i, highsens_i, ss_i in zip(*values_norm):
-        rx_i, ry_i = normalize_seq(rx_i), normalize_seq(ry_i)
+    for rx_i, ry_i, darkstr_i, brightstr_i, lowsens_i, highsens_i, ss_i in values_norm:
+
 
         if len(set(rx_i)) == len(set(ry_i)) == 1 or planes == [0] or work_clip.format.num_planes == 1:
-            rx_i, ry_i = rx_i[0], ry_i[0]
-
-        if isinstance(rx_i, list) or isinstance(ry_i, list):
+            dehalo = _rescale(work_clip, rx_i[0], ry_i[0])
+        else:
             dehalo = join([
                 _rescale(plane, rxp, ryp)
-                for plane, rxp, ryp in zip(split(work_clip), normalize_seq(rx_i), normalize_seq(ry_i))
+                for plane, rxp, ryp in zip(split(work_clip), rx_i, ry_i)
             ])
-        else:
-            dehalo = _rescale(work_clip, rx_i, ry_i)
 
         mask = norm_expr(
             [masks.gradient(work_clip, mask_radius, planes), masks.gradient(dehalo, mask_radius, planes)],
             'x 0 = 1.0 x y - x / ? {lowsens} - x {peak} / 256 255 / + 512 255 / / {highsens} + * '
             '0.0 max 1.0 min {peak} *', planes, peak=peak,
-            lowsens=[lo / 255 for lo in to_arr(lowsens_i)], highsens=[hi / 100 for hi in to_arr(highsens_i)]
+            lowsens=[lo / 255 for lo in lowsens_i], highsens=[hi / 100 for hi in highsens_i]
         )
 
-        sig_mask = bool(sigma_mask)
-        conv_values = [float(sig_mask)] * 9
+        conv_values = [float((sig_mask := bool(sigma_mask)))] * 9
         conv_values[5] = 1 / clamp(sigma_mask, 0, 1) if sig_mask else 1
 
         mask = mask.std.Convolution(conv_values, planes=planes)
@@ -440,18 +439,13 @@ def dehalo_alpha(
 
         dehalo = dehalo.std.MaskedMerge(work_clip, mask, planes=planes)
 
-        ss_i = normalize_seq(ss_i)
-
         if len(set(ss_i)) == 1 or planes == [0] or work_clip.format.num_planes == 1:
-            ss_i = ss_i[0]
-
-        if isinstance(ss_i, list):
+            dehalo = _supersample(work_clip, dehalo, ss_i[0])
+        else:
             dehalo = join([
-                _supersample(work_clip, dehalo, ssp)
+                _supersample(wplane, dplane, ssp)
                 for wplane, dplane, ssp in zip(split(work_clip), split(dehalo), ss_i)
             ])
-        else:
-            dehalo = _supersample(work_clip, dehalo, ss_i)
 
         dehalo = norm_expr(
             [work_clip, dehalo], 'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?', planes,
