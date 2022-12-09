@@ -412,7 +412,14 @@ def dehalo_alpha(
     ])
 
     for rx_i, ry_i, darkstr_i, brightstr_i, lowsens_i, highsens_i, ss_i in values_norm:
+        if not all(x >= 1 for x in (*ss_i, *rx_i, *ry_i)):
+            raise CustomIndexError('ss, rx, and ry must all be bigger than 1.0!', func)
 
+        if not all(0 <= x <= 1 for x in (*brightstr_i, *darkstr_i)):
+            raise CustomIndexError('brightstr, darkstr must be between 0.0 and 1.0!', func)
+
+        if not all(0 <= x <= 100 for x in (*lowsens_i, *highsens_i)):
+            raise CustomIndexError('lowsens and highsens must be between 0 and 100!', func)
 
         if len(set(rx_i)) == len(set(ry_i)) == 1 or planes == [0] or work_clip.format.num_planes == 1:
             dehalo = _rescale(work_clip, rx_i[0], ry_i[0])
