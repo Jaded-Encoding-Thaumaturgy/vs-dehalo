@@ -8,9 +8,9 @@ from vsmask.util import XxpandMode, expand, inpand
 from vsrgtools import box_blur, contrasharpening, contrasharpening_dehalo, repair
 from vsrgtools.util import norm_rmode_planes
 from vstools import (
-    ColorRange, ConvMode, FuncExceptT, InvalidColorFamilyError, PlanesT, check_variable, clamp, cround,
-    disallow_variable_format, disallow_variable_resolution, fallback, get_peak_value, get_y, join, mod4,
-    normalize_planes, normalize_seq, scale_value, split, to_arr, vs
+    ColorRange, ConvMode, CustomIndexError, FuncExceptT, InvalidColorFamilyError, PlanesT, check_variable, clamp,
+    cround, disallow_variable_format, disallow_variable_resolution, fallback, get_peak_value, get_y, join, mod4,
+    normalize_planes, normalize_seq, scale_value, split, vs, CustomValueError
 )
 
 from . import masks
