@@ -25,7 +25,7 @@ __all__ = [
 @disallow_variable_format
 @disallow_variable_resolution
 def fine_dehalo(
-    clip: vs.VideoNode, /, ref: vs.VideoNode | None = None,
+    clip: vs.VideoNode,
     rx: float = 2.0, ry: float | None = None,
     darkstr: float = 0.0, brightstr: float = 1.0,
     lowsens: int = 50, highsens: int = 50,
@@ -41,7 +41,6 @@ def fine_dehalo(
     Halo removal script that uses dehalo_alpha with a few masks and optional contra-sharpening
     to try remove halos without removing important details (like line edges).
     :param clip:        Source clip
-    :param ref:         Dehaloed reference. Replace dehalo_alpha call
     :param rx:          X radius for halo removal in :py:func:`dehalo_alpha`
     :param ry:          Y radius for halo removal in :py:func:`dehalo_alpha`. If none ry = rx
     :param darkstr:     Strength factor for processing dark halos
@@ -83,12 +82,9 @@ def fine_dehalo(
 
     work_clip, *chroma = split(clip) if planes == [0] else (clip, )
 
-    if ref:
-        dehaloed = get_y(ref) if planes == [0] else ref
-    else:
-        dehaloed = dehalo_alpha(
-            work_clip, rx, ry, darkstr, brightstr, lowsens, highsens, ss=ss, planes=planes
-        )
+    dehaloed = dehalo_alpha(
+        work_clip, rx, ry, darkstr, brightstr, lowsens, highsens, ss=ss, planes=planes
+    )
 
     if contra:
         if isinstance(contra, (int, bool)):
