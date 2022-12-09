@@ -22,6 +22,9 @@ __all__ = [
 ]
 
 
+FloatIterArr = float | list[float] | tuple[float | list[float], ...]
+
+
 @disallow_variable_format
 @disallow_variable_resolution
 def fine_dehalo(
@@ -298,19 +301,13 @@ def fine_dehalo2(
 @disallow_variable_format
 @disallow_variable_resolution
 def dehalo_alpha(
-    clip: vs.VideoNode,
-    rx: float | list[float] | tuple[float | list[float], ...] = 2.0,
-    ry: float | list[float] | tuple[float | list[float], ...] | None = None,
-    darkstr: float | list[float] | tuple[float | list[float], ...] = 0.0,
-    brightstr: float | list[float] | tuple[float | list[float], ...] = 1.0,
-    lowsens: float | list[float] | tuple[float | list[float], ...] = 50.0,
-    highsens: float | list[float] | tuple[float | list[float], ...] = 50.0,
-    sigma_mask: float = 0.0, ss: float | list[float] | tuple[float | list[float], ...] = 1.5,
-    planes: PlanesT = 0, show_mask: bool = False, mask_radius: int = 1,
-    downscaler: ScalerT = Mitchell, upscaler: ScalerT = BSpline,
-    supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell,
-    pre_ss: float = 1.0, pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift),
-    pre_downscaler: ScalerT = Point, func: FuncExceptT | None = None
+    clip: vs.VideoNode, rx: FloatIterArr = 2.0, ry: FloatIterArr | None = None, darkstr: FloatIterArr = 0.0,
+    brightstr: FloatIterArr = 1.0, lowsens: FloatIterArr = 50.0, highsens: FloatIterArr = 50.0,
+    sigma_mask: float = 0.0, ss: FloatIterArr = 1.5, planes: PlanesT = 0, show_mask: bool = False,
+    mask_radius: int = 1, downscaler: ScalerT = Mitchell, upscaler: ScalerT = BSpline,
+    supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell, pre_ss: float = 1.0,
+    pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift), pre_downscaler: ScalerT = Point,
+    func: FuncExceptT | None = None
 ) -> vs.VideoNode:
     """
     Reduce halo artifacts by nuking everything around edges (and also the edges actually).
