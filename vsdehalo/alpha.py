@@ -34,7 +34,8 @@ def fine_dehalo(
     ss: float = 1.25,
     contra: int | float | bool = 0.0, excl: bool = True,
     edgeproc: float = 0.0, planes: PlanesT = 0,
-    edgemask: EdgeDetect = Robinson3(), show_mask: int = False
+    edgemask: EdgeDetect = Robinson3(), show_mask: int = False,
+    func: FuncExceptT | None = None
 ) -> vs.VideoNode:
     """
     Halo removal script that uses dehalo_alpha with a few masks and optional contra-sharpening
@@ -62,20 +63,12 @@ def fine_dehalo(
     """
     assert clip.format
 
-    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
-        raise ValueError('fine_dehalo: format not supported')
+    func = func or fine_dehalo
 
-    if not all(x >= 1 for x in (ss, rx, ry) if x is not None):
-        raise ValueError('fine_dehalo: rfactor, rx, and ry must all be bigger than 1.0!')
-
-    if not 0 <= darkstr <= 1:
-        raise ValueError('fine_dehalo: darkstr must be between 0.0 and 1.0!')
-
-    if not all(0 <= sens <= 100 for sens in (lowsens, highsens)):
-        raise ValueError('fine_dehalo: lowsens and highsens must be between 0 and 100!')
+    InvalidColorFamilyError.check(clip, (vs.GRAY, vs.YUV), func)
 
     if show_mask is not False and not (0 < int(show_mask) <= 7):
-        raise ValueError('fine_dehalo: Valid values for show_mask are 0–7!')
+        raise CustomValueError('valid values for show_mask are 0–7!', func)
 
     thmi, thma, thlimi, thlima = [
         scale_value(x, 8, clip.format.bits_per_sample, ColorRange.FULL)
