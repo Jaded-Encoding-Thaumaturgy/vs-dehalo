@@ -2,16 +2,15 @@ from __future__ import annotations
 
 from functools import partial
 from math import ceil
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC, Prefilter
 from vsexprtools import norm_expr_planes
-from vsmask.edge import Prewitt
-from vsmask.util import expand, inpand
+from vsmasktools import Morpho, Prewitt
 from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair
 from vstools import (
     PlanesT, core, depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth, get_peak_value,
-    get_y, iterate, join, normalize_planes, normalize_seq, scale_value, split, vs
+    get_y, iterate, join, normalize_planes, normalize_seq, scale_value, split, vs, check_ref_clip
 )
 
 __all__ = [
@@ -72,8 +71,8 @@ def bidehalo(
 
     bits = get_depth(clip)
 
-    bm3d_args = fallback(bm3d_args, dict[str, Any]())
-    bilateral_args = fallback(bilateral_args, dict[str, Any]())
+    bm3d_args = bm3d_args or dict[str, Any]()
+    bilateral_args = bilateral_args or dict[str, Any]()
 
     sigma_final = fallback(sigma_final, sigma / 3)
     radius_final = fallback(radius_final, radius)
@@ -206,7 +205,7 @@ def HQDeringmod(
 
     # Kernel: Smoothing
     if not isinstance(smooth, vs.VideoNode):
-        smoothy, smoothc = normalize_seq(smooth, 2)
+        smoothy, smoothc = cast(tuple[Prefilter, Prefilter], normalize_seq(smooth, 2))
 
         def _get_kwargs(pref: Prefilter) -> dict[str, Any]:
             if pref != Prefilter.DFTTEST:
@@ -224,15 +223,9 @@ def HQDeringmod(
                 smoothc(work_clip, list(set(planes) - {0}), **_get_kwargs(smoothc))
             ], [0, 1, 2], vs.YUV)
     else:
-        assert work_clip.format and smooth.format
+        check_ref_clip(clip, smooth)  # type: ignore
 
-        if smooth.format.id != clip.format.id:
-            raise ValueError("Smooth clip format must match the source clip's!")
-
-        if smooth.width != clip.width or smooth.height != clip.height:
-            raise ValueError("Smooth clip sizes must match the source clip's!")
-
-        smoothed = get_y(smooth) if planes == [0] else smooth
+        smoothed = get_y(smooth) if planes == [0] else smooth  # type: ignore
 
     # Post-Process: Contra-Sharpening
     if contra:
@@ -254,11 +247,11 @@ def HQDeringmod(
 
     if ringmask is None:
         # FIXME: <= instead of < for lthr, Vardë?
-        prewittm = Prewitt().edgemask(work_clip, scale_value(mthr, 8, bits) + 1)
+        prewittm = Prewitt.edgemask(work_clip, scale_value(mthr, 8, bits) + 1)
 
-        fmask = prewittm.std.Median(planes).misc.Hysteresis(prewittm, planes)
+        fmask = prewittm.std.Median(planes).misc.Hysteresis(prewittm, planes)  # type: ignore
 
-        omask = expand(fmask, mrad, mrad, planes=planes) if mrad > 0 else fmask
+        omask = Morpho.expand(fmask, mrad, mrad, planes=planes) if mrad > 0 else fmask
 
         if msmooth > 0:
             omask = iterate(omask, partial(core.std.Inflate, planes=planes), msmooth)
@@ -269,9 +262,9 @@ def HQDeringmod(
             if minp <= 0:
                 imask = fmask
             elif minp % 2 == 0:
-                imask = inpand(fmask, minp // 2, planes=planes)
+                imask = Morpho.inpand(fmask, minp // 2, planes=planes)
             else:
-                imask = inpand(fmask.std.Inflate(planes), ceil(minp / 2), planes=planes)
+                imask = Morpho.inpand(fmask.std.Inflate(planes), ceil(minp / 2), planes=planes)
 
             ringmask = core.std.Expr([omask, imask], f'x {peak} y - * {peak} /')
 

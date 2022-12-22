@@ -3,8 +3,7 @@ from __future__ import annotations
 from vsaa import Nnedi3
 from vsexprtools import ExprOp, aka_expr_available, combine, norm_expr
 from vskernels import BSpline, Lanczos, Mitchell, NoShift, Point, Scaler, ScalerT
-from vsmask.edge import EdgeDetect, Robinson3
-from vsmask.util import XxpandMode, expand, inpand
+from vsmasktools import EdgeDetect, Robinson3, XxpandMode, grow_mask, Morpho
 from vsrgtools import box_blur, contrasharpening, contrasharpening_dehalo, repair
 from vsrgtools.util import norm_rmode_planes
 from vstools import (
@@ -12,8 +11,6 @@ from vstools import (
     check_variable, clamp, cround, disallow_variable_format, disallow_variable_resolution, fallback, get_peak_value,
     join, mod4, normalize_planes, normalize_seq, scale_value, split, to_arr, vs
 )
-
-from . import masks
 
 __all__ = [
     'fine_dehalo',
@@ -62,8 +59,8 @@ def fine_dehalo(
     :param highsens:            Sensitivity setting for define how strong the dehalo has to be to get fully discarded.
     :param thmi:                Minimum threshold for sharp edges; keep only the sharpest edges (line edges).
     :param thma:                Maximum threshold for sharp edges; keep only the sharpest edges (line edges).
-    :param thlimi:              Minimum limiting threshold; includes more edges than previously, but ignores simple details.
-    :param thlima:              Maximum limiting threshold; includes more edges than previously, but ignores simple details.
+    :param thlimi:              Minimum limiting threshold; includes more edges than previously ignoring simple details.
+    :param thlima:              Maximum limiting threshold; includes more edges than previously ignoring simple details.
     :param sigma_mask:          Blurring strength for the mask.
     :param ss:                  Supersampling factor, to avoid creation of aliasing.
     :param contra:              Contrasharpening. If True or int, will use :py:func:`contrasharpening`
@@ -116,7 +113,7 @@ def fine_dehalo(
     strong = norm_expr(edges, f'x {thmif} - {thmaf - thmif} / {peak} *', planes)
 
     # Extends them to include the potential halos
-    large = expand(strong, rx_i, ry_i, planes=planes)
+    large = Morpho.expand(strong, rx_i, ry_i, planes=planes)
 
     # Exclusion zones #
     # When two edges are close from each other (both edges of a single
@@ -133,14 +130,14 @@ def fine_dehalo(
     # edge masks will join and merge, forming a solid area, which will
     # remain solid even after the shrinking stage.
     # Mask growing
-    shrink = expand(light, rx_i, ry_i, XxpandMode.ELLIPSE, planes=planes)
+    shrink = Morpho.expand(light, rx_i, ry_i, XxpandMode.ELLIPSE, planes=planes)
 
     # At this point, because the mask was made of a shades of grey, we may
     # end up with large areas of dark grey after shrinking. To avoid this,
     # we amplify and saturate the mask here (actually we could even
     # binarize it).
     shrink = norm_expr(shrink, 'x 4 *', planes)
-    shrink = inpand(shrink, rx_i, rx_i, XxpandMode.ELLIPSE, planes=planes)
+    shrink = Morpho.inpand(shrink, rx_i, rx_i, XxpandMode.ELLIPSE, planes=planes)
 
     # This mask is almost binary, which will produce distinct
     # discontinuities once applied. Then we have to smooth it.
@@ -277,7 +274,7 @@ def fine_dehalo2(
     ]
 
     mask_h, mask_v = [
-        masks.grow_mask(mask, radius, 1.8, planes, coordinates=coord) if mask else None
+        grow_mask(mask, radius, 1.8, planes, coordinates=coord) if mask else None
         for mask, coord in [
             (mask_h, [0, 1, 0, 0, 0, 0, 1, 0]), (mask_v, [0, 0, 0, 1, 1, 0, 0, 0])
         ]
@@ -438,7 +435,7 @@ def dehalo_alpha(
             ])
 
         mask = norm_expr(
-            [masks.gradient(work_clip, mask_radius, planes), masks.gradient(dehalo, mask_radius, planes)],
+            [Morpho.gradient(work_clip, mask_radius, planes), Morpho.gradient(dehalo, mask_radius, planes)],
             'x 0 = 1.0 x y - x / ? {lowsens} - x {peak} / 256 255 / + 512 255 / / {highsens} + * '
             '0.0 max 1.0 min {peak} *', planes, peak=peak,
             lowsens=[lo / 255 for lo in lowsens_i], highsens=[hi / 100 for hi in highsens_i]

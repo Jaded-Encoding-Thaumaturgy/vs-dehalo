@@ -3,7 +3,7 @@ from __future__ import annotations
 from math import sqrt
 from typing import Sequence
 
-from vsmask.edge import EdgeDetect, PrewittStd
+from vsmasktools import EdgeDetect, EdgeDetectT, PrewittStd
 from vsrgtools import min_blur, removegrain, repair
 from vsrgtools.util import mean_matrix, wmean_matrix
 from vstools import (
@@ -21,12 +21,14 @@ __all__ = [
 def edge_cleaner(
     clip: vs.VideoNode, strength: float = 10, rmode: int = 17,
     hot: bool = False, smode: bool = False, planes: PlanesT = 0,
-    edgemask: EdgeDetect = PrewittStd()
+    edgemask: EdgeDetectT = PrewittStd
 ) -> vs.VideoNode:
     assert clip.format
 
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise ValueError('edge_cleaner: format not supported')
+
+    edgemask = EdgeDetect.ensure_obj(edgemask, edge_cleaner)
 
     planes = normalize_planes(clip, planes)
 

@@ -7,16 +7,18 @@ from functools import partial
 from math import log
 from typing import Any
 
-from vsdenoise import CCDMode, CCDPoints, ChannelMode, MVTools, PelType, Prefilter, ccd, knl_means_cl
+from vsdenoise import (
+    CCDMode, CCDPoints, ChannelMode, MotionMode, MVTools, PelType, Prefilter, SearchMode, ccd, knl_means_cl
+)
 from vsexprtools import norm_expr_planes
 from vskernels import Bicubic
+from vsmasktools import Morpho
 from vsrgtools import contrasharpening_dehalo, gauss_blur, gauss_fmtc_blur, lehmer_diff_merge
 from vstools import (
     Matrix, PlanesT, check_ref_clip, core, disallow_variable_format, disallow_variable_resolution, get_y, join,
     normalize_planes, split, vs
 )
 
-from . import masks
 from .alpha import fine_dehalo
 
 __all__ = [
@@ -125,7 +127,7 @@ def smooth_clip(
         )
     else:
         clean = lehmer_diff_merge(
-            gauss_blur(work_clip, 0.5), clean, blur_func, planes=planes
+            gauss_blur(work_clip, 0.5), clean, blur_func, planes=planes  # type: ignore
         )
 
     diff = work_clip.std.MakeDiff(clean, planes)
@@ -188,12 +190,10 @@ def dehalo(
     me_sad = constant * pow(thSAD, 2.0) * log(1.0 + 1.0 / (constant * thSAD))
 
     if isinstance(mask, vs.VideoNode):
-        check_ref_clip(src, (halo_mask := mask))
+        check_ref_clip(src, (halo_mask := mask))  # type: ignore
     elif mask:
-        halo_mask = fine_dehalo(
-            work_clip, None, 2.1, 2.1, ss=1, edgeproc=0.5, show_mask=True, planes=planes
-        )
-        halo_mask = masks.dilation(halo_mask, 1, planes)
+        halo_mask = fine_dehalo(work_clip, 2.1, ss=1, edgeproc=0.5, show_mask=True, planes=planes)
+        halo_mask = Morpho.dilation(halo_mask, 1, planes)
     else:
         halo_mask = None
 
@@ -210,15 +210,19 @@ def dehalo(
     if src_super and smooth_super:
         smooth_super = smooth_super.std.MakeDiff(src_super)
 
-    mv = MVTools(
+    class CustomSubPelClipsMVTools(MVTools):
+        def get_subpel_clips(self, *args: Any) -> tuple[vs.VideoNode | None, vs.VideoNode | None]:
+            return (smooth_super, src_super)
+
+    mv = CustomSubPelClipsMVTools(
         smooth_wclip, tr, refine, prefilter=Prefilter.NONE,
-        pel=pel, rfilter=4, planes=planes, fix_fades=False
+        pel=pel, rfilter=4, planes=planes
     )
-    mv.subpel_clips = (smooth_super, src_super)
+
     mv.analyze_args |= dict[str, Any](trymany=True, badrange=-24, divide=0)
     mv.recalculate_args |= dict[str, Any](smooth=1, divide=0, thsad=me_sad)
 
-    mv.analyze(work_clip, search=3, truemotion=False)
+    mv.analyze(ref=work_clip, search=SearchMode.EXHAUSTIVE, motion=MotionMode.HIGH_SAD)
 
     averaged_dif = mv.degrain(thSAD=thSAD)
 
@@ -229,7 +233,7 @@ def dehalo(
     clean = work_clip.std.MergeDiff(averaged_dif, planes)
 
     if halo_mask:
-        clean = work_clip.std.MaskedMerge(clean, halo_mask, planes)
+        clean = work_clip.std.MaskedMerge(clean, halo_mask, planes)  # type: ignore
 
     if chroma:
         clean = join([clean, *chroma], vs.YUV)
