@@ -127,7 +127,7 @@ def HQDeringmod(
     sigma: float = 128.0, sigma2: float | None = None,
     sbsize: int | None = None, sosize: int | None = None,
     contra: int | float | bool = 1.2, drrep: int = 13,
-    planes: PlanesT = 0, show: bool = False, **kwargs: Any
+    planes: PlanesT = 0, show_mask: bool = False, **kwargs: Any
 ) -> vs.VideoNode:
     """
     :param clip:        Clip to process.
@@ -176,7 +176,7 @@ def HQDeringmod(
                             float: represents level for contrasharpening_dehalo
     :param drrep:       Use repair for details retention, recommended values are 13/12/1.
     :param planes:      Planes to be processed.
-    :param show:        Show the computed ringing mask.
+    :param show_mask:   Show the computed ringing mask.
     :param kwargs:      Kwargs to be passed to the prefilter function.
 
     :return:            Deringed clip.
@@ -270,7 +270,7 @@ def HQDeringmod(
 
     dering = work_clip.std.MaskedMerge(limitclp, ringmask, planes)
 
-    if show:
+    if show_mask:
         return ringmask
 
     if chroma:
