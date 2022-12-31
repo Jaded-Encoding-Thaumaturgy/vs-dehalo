@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from functools import partial
 from math import ceil
 from typing import Any, Literal, cast
 
 from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC, Prefilter
 from vsexprtools import norm_expr_planes
+from vskernels import ScalerT, NoShift, Point, Scaler
 from vsmasktools import Morpho, Prewitt
 from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair
+from vsaa import Nnedi3
 from vstools import (
     PlanesT, core, depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth, get_peak_value,
-    get_y, iterate, join, normalize_planes, normalize_seq, scale_value, split, vs, check_ref_clip
+    get_y, join, mod4, normalize_planes, normalize_seq, scale_value, split, vs, check_ref_clip
 )
 
 __all__ = [
@@ -126,8 +127,9 @@ def HQDeringmod(
     thr: int = 12, elast: float = 2.0, darkthr: int | None = None,
     sigma: float = 128.0, sigma2: float | None = None,
     sbsize: int | None = None, sosize: int | None = None,
-    contra: int | float | bool = 1.2, drrep: int = 13,
-    planes: PlanesT = 0, show_mask: bool = False, **kwargs: Any
+    contra: int | float | bool = 1.2, drrep: int = 13, pre_ss: float = 1.0,
+    pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift),
+    pre_downscaler: ScalerT = Point, planes: PlanesT = 0, show_mask: bool = False, **kwargs: Any
 ) -> vs.VideoNode:
     """
     :param clip:        Clip to process.
@@ -189,7 +191,16 @@ def HQDeringmod(
     peak = get_peak_value(clip)
     bits = clip.format.bits_per_sample
     planes = normalize_planes(clip, planes)
+    pre_supersampler = Scaler.ensure_obj(pre_supersampler, HQDeringmod)
+    pre_downscaler = Scaler.ensure_obj(pre_downscaler, HQDeringmod)
+
     work_clip, *chroma = split(clip) if planes == [0] else (clip, )
+
+    if pre_ss > 1.0:
+        work_clip = pre_supersampler.scale(
+            work_clip, mod4(work_clip.width * pre_ss), mod4(work_clip.height * pre_ss)
+        )
+
     assert work_clip.format
 
     is_HD = clip.width >= 1280 or clip.height >= 720
@@ -272,6 +283,9 @@ def HQDeringmod(
 
     if show_mask:
         return ringmask
+
+    if (dering.width, dering.height) != (clip.width, clip.height):
+        dering = pre_downscaler.scale(work_clip, clip.width, clip.height)
 
     if chroma:
         return join([dering, *chroma], clip.format.color_family)
