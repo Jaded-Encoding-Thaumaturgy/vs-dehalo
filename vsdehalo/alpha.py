@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Sequence
 
 from vsaa import Nnedi3
 from vsexprtools import ExprOp, aka_expr_available, combine, norm_expr
@@ -33,6 +34,7 @@ def fine_dehalo(
     mask_radius: int = 1, downscaler: ScalerT = Mitchell, upscaler: ScalerT = BSpline,
     supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell, pre_ss: float = 1.0,
     pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift), pre_downscaler: ScalerT = Point,
+    mask_coords: int | tuple[int, ConvMode] | Sequence[int] = 3,
     func: FuncExceptT | None = None
 ) -> vs.VideoNode:
     """
@@ -171,7 +173,8 @@ def fine_dehalo(
 
     dehaloed = dehalo_alpha(
         work_clip, rx, ry, darkstr, brightstr, lowsens, highsens, sigma_mask, ss, planes, False, mask_radius,
-        downscaler, upscaler, supersampler, supersampler_ref, pre_ss, pre_supersampler, pre_downscaler, func
+        downscaler, upscaler, supersampler, supersampler_ref, pre_ss, pre_supersampler, pre_downscaler,
+        mask_coords, func
     )
 
     if isinstance(contra, float):
@@ -322,6 +325,7 @@ def dehalo_alpha(
     mask_radius: int = 1, downscaler: ScalerT = Mitchell, upscaler: ScalerT = BSpline,
     supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell, pre_ss: float = 1.0,
     pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift), pre_downscaler: ScalerT = Point,
+    mask_coords: int | tuple[int, ConvMode] | Sequence[int] = 3,
     func: FuncExceptT | None = None
 ) -> vs.VideoNode:
     """
@@ -435,7 +439,10 @@ def dehalo_alpha(
             ])
 
         mask = norm_expr(
-            [Morpho.gradient(work_clip, mask_radius, planes), Morpho.gradient(dehalo, mask_radius, planes)],
+            [
+                Morpho.gradient(work_clip, mask_radius, planes, coords=mask_coords),
+                Morpho.gradient(dehalo, mask_radius, planes, coords=mask_coords)
+            ],
             'x 0 = 1.0 x y - x / ? {lowsens} - x {peak} / 256 255 / + 512 255 / / {highsens} + * '
             '0.0 max 1.0 min {peak} *', planes, peak=peak,
             lowsens=[lo / 255 for lo in lowsens_i], highsens=[hi / 100 for hi in highsens_i]
