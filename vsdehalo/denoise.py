@@ -11,11 +11,13 @@ from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo
 from vsaa import Nnedi3
 from vstools import (
     PlanesT, core, depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth, get_peak_value,
-    get_y, join, mod4, normalize_planes, normalize_seq, scale_value, split, vs, check_ref_clip
+    get_y, join, mod4, normalize_planes, normalize_seq, scale_value, split, vs, check_ref_clip, copy_signature
 )
 
 __all__ = [
-    'bidehalo', 'HQDeringmod'
+    'bidehalo',
+    'smooth_dering',
+    'HQDeringmod'
 ]
 
 
@@ -119,7 +121,7 @@ def bidehalo(
 
 @disallow_variable_format
 @disallow_variable_resolution
-def HQDeringmod(
+def smooth_dering(
     clip: vs.VideoNode,
     smooth: vs.VideoNode | Prefilter | tuple[Prefilter, Prefilter] = Prefilter.MINBLUR1,
     ringmask: vs.VideoNode | None = None,
@@ -186,13 +188,13 @@ def HQDeringmod(
     assert clip.format
 
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
-        raise ValueError('HQDeringmod: format not supported')
+        raise ValueError('smooth_dering: format not supported')
 
     peak = get_peak_value(clip)
     bits = clip.format.bits_per_sample
     planes = normalize_planes(clip, planes)
-    pre_supersampler = Scaler.ensure_obj(pre_supersampler, HQDeringmod)
-    pre_downscaler = Scaler.ensure_obj(pre_downscaler, HQDeringmod)
+    pre_supersampler = Scaler.ensure_obj(pre_supersampler, smooth_dering)
+    pre_downscaler = Scaler.ensure_obj(pre_downscaler, smooth_dering)
 
     work_clip, *chroma = split(clip) if planes == [0] else (clip, )
 
@@ -291,3 +293,10 @@ def HQDeringmod(
         return join([dering, *chroma], clip.format.color_family)
 
     return dering
+
+
+@copy_signature(smooth_dering)
+def HQDeringmod(*args: Any, **kwargs: Any) -> Any:
+    import warnings
+    warnings.warn('HQDeringmod is deprecated! Use smooth_dering!', DeprecationWarning)
+    return smooth_dering(*args, **kwargs)
