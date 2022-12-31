@@ -4,14 +4,15 @@ from math import ceil
 from typing import Any, Literal, cast
 
 from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC, Prefilter
-from vsexprtools import norm_expr_planes
+from vsexprtools import ExprToken, norm_expr, norm_expr_planes
 from vskernels import ScalerT, NoShift, Point, Scaler
 from vsmasktools import Morpho, Prewitt
 from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair
 from vsaa import Nnedi3
 from vstools import (
-    PlanesT, core, depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth, get_peak_value,
-    get_y, join, mod4, normalize_planes, normalize_seq, scale_value, split, vs, check_ref_clip, copy_signature
+    PlanesT, core, depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth,
+    get_y, mod4, normalize_planes, normalize_seq, scale_value, vs, check_ref_clip, copy_signature,
+    FunctionUtil
 )
 
 __all__ = [
@@ -119,8 +120,6 @@ def bidehalo(
     return core.std.Expr([clip, bidh], norm_expr_planes(clip, 'x y min', planes))
 
 
-@disallow_variable_format
-@disallow_variable_resolution
 def smooth_dering(
     clip: vs.VideoNode,
     smooth: vs.VideoNode | Prefilter | tuple[Prefilter, Prefilter] = Prefilter.MINBLUR1,
@@ -185,32 +184,17 @@ def smooth_dering(
 
     :return:            Deringed clip.
     """
-    assert clip.format
+    func = FunctionUtil(clip, smooth_dering, planes, (vs.GRAY, vs.YUV))
+    planes = func.norm_planes
+    work_clip = func.work_clip
 
-    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
-        raise ValueError('smooth_dering: format not supported')
-
-    peak = get_peak_value(clip)
-    bits = clip.format.bits_per_sample
-    planes = normalize_planes(clip, planes)
     pre_supersampler = Scaler.ensure_obj(pre_supersampler, smooth_dering)
     pre_downscaler = Scaler.ensure_obj(pre_downscaler, smooth_dering)
 
-    work_clip, *chroma = split(clip) if planes == [0] else (clip, )
-
     if pre_ss > 1.0:
-        work_clip = pre_supersampler.scale(
+        work_clip = pre_supersampler.scale(  # type: ignore
             work_clip, mod4(work_clip.width * pre_ss), mod4(work_clip.height * pre_ss)
         )
-
-    assert work_clip.format
-
-    is_HD = clip.width >= 1280 or clip.height >= 720
-
-    # Parameters for deringing kernel
-    sigma2 = fallback(sigma2, sigma / 16)
-    sbsize = fallback(sbsize, 8 if is_HD else 6)
-    sosize = fallback(sosize, 6 if is_HD else 4)
 
     darkthr = fallback(darkthr, thr // 4)
 
@@ -218,6 +202,10 @@ def smooth_dering(
 
     # Kernel: Smoothing
     if not isinstance(smooth, vs.VideoNode):
+        sigma2 = fallback(sigma2, sigma / 16)
+        sbsize = fallback(sbsize, 8 if func.is_hd else 6)
+        sosize = fallback(sosize, 6 if func.is_hd else 4)
+
         smoothy, smoothc = cast(tuple[Prefilter, Prefilter], normalize_seq(smooth, 2))
 
         def _get_kwargs(pref: Prefilter) -> dict[str, Any]:
@@ -228,7 +216,7 @@ def smooth_dering(
                     0.0, sigma2, 0.05, sigma, 0.5, sigma, 0.75, sigma2, 1.0, 0.0
                 ])
 
-        if smoothy == smoothc or work_clip.format.num_planes == 1:
+        if smoothy == smoothc or func.luma_only == 1:
             smoothed = smoothy(work_clip, planes, **_get_kwargs(smoothy))
         else:
             smoothed = core.std.ShufflePlanes([
@@ -238,7 +226,7 @@ def smooth_dering(
     else:
         check_ref_clip(clip, smooth)  # type: ignore
 
-        smoothed = get_y(smooth) if planes == [0] else smooth  # type: ignore
+        smoothed = get_y(smooth) if func.luma_only else smooth  # type: ignore
 
     # Post-Process: Contra-Sharpening
     if contra:
@@ -260,14 +248,14 @@ def smooth_dering(
 
     if ringmask is None:
         # FIXME: <= instead of < for lthr, Vardë?
-        prewittm = Prewitt.edgemask(work_clip, scale_value(mthr, 8, bits) + 1)
+        prewittm = Prewitt.edgemask(work_clip, scale_value(mthr, 8, work_clip) + 1)
 
         fmask = prewittm.std.Median(planes).misc.Hysteresis(prewittm, planes)  # type: ignore
 
         omask = Morpho.expand(fmask, mrad, mrad, planes=planes) if mrad > 0 else fmask
 
         if msmooth > 0:
-            omask = iterate(omask, partial(core.std.Inflate, planes=planes), msmooth)
+            omask = Morpho.inflate(omask, msmooth, planes)
 
         if incedge:
             ringmask = omask
@@ -277,9 +265,9 @@ def smooth_dering(
             elif minp % 2 == 0:
                 imask = Morpho.inpand(fmask, minp // 2, planes=planes)
             else:
-                imask = Morpho.inpand(fmask.std.Inflate(planes), ceil(minp / 2), planes=planes)
+                imask = Morpho.inpand(Morpho.inflate(fmask, 1, planes), ceil(minp / 2), planes=planes)
 
-            ringmask = core.std.Expr([omask, imask], f'x {peak} y - * {peak} /')
+            ringmask = norm_expr([omask, imask], f'x {ExprToken.RangeMax} y - * {ExprToken.RangeMax} /')
 
     dering = work_clip.std.MaskedMerge(limitclp, ringmask, planes)
 
@@ -289,10 +277,7 @@ def smooth_dering(
     if (dering.width, dering.height) != (clip.width, clip.height):
         dering = pre_downscaler.scale(work_clip, clip.width, clip.height)
 
-    if chroma:
-        return join([dering, *chroma], clip.format.color_family)
-
-    return dering
+    return func.return_clip(dering)
 
 
 @copy_signature(smooth_dering)
