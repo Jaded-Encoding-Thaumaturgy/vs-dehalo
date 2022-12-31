@@ -27,7 +27,7 @@ FloatIterArr = float | list[float] | tuple[float | list[float], ...]
 def fine_dehalo(
     clip: vs.VideoNode, rx: FloatIterArr = 2.0, ry: FloatIterArr | None = None, darkstr: FloatIterArr = 0.0,
     brightstr: FloatIterArr = 1.0, lowsens: FloatIterArr = 50.0, highsens: FloatIterArr = 50.0,
-    thmi: int = 80, thma: int = 128, thlimi: int = 50, thlima: int = 100, sigma_mask: float = 0.0,
+    thmi: int = 80, thma: int = 128, thlimi: int = 50, thlima: int = 100, sigma_mask: float | bool = False,
     ss: FloatIterArr = 1.5, contra: int | float | bool = 0.0, exclude: bool = True,
     edgeproc: float = 0.0, edgemask: EdgeDetect = Robinson3(), planes: PlanesT = 0, show_mask: int | bool = False,
     mask_radius: int = 1, downscaler: ScalerT = Mitchell, upscaler: ScalerT = BSpline,
@@ -318,7 +318,7 @@ def fine_dehalo2(
 def dehalo_alpha(
     clip: vs.VideoNode, rx: FloatIterArr = 2.0, ry: FloatIterArr | None = None, darkstr: FloatIterArr = 0.0,
     brightstr: FloatIterArr = 1.0, lowsens: FloatIterArr = 50.0, highsens: FloatIterArr = 50.0,
-    sigma_mask: float = 0.0, ss: FloatIterArr = 1.5, planes: PlanesT = 0, show_mask: bool = False,
+    sigma_mask: float | bool = False, ss: FloatIterArr = 1.5, planes: PlanesT = 0, show_mask: bool = False,
     mask_radius: int = 1, downscaler: ScalerT = Mitchell, upscaler: ScalerT = BSpline,
     supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell, pre_ss: float = 1.0,
     pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift), pre_downscaler: ScalerT = Point,
@@ -441,10 +441,14 @@ def dehalo_alpha(
             lowsens=[lo / 255 for lo in lowsens_i], highsens=[hi / 100 for hi in highsens_i]
         )
 
-        conv_values = [float((sig_mask := bool(sigma_mask)))] * 9
-        conv_values[5] = 1 / clamp(sigma_mask, 0, 1) if sig_mask else 1
+        if sigma_mask is not False:
+            if sigma_mask is True:
+                sigma_mask = 0.0
 
-        mask = mask.std.Convolution(conv_values, planes=planes)
+            conv_values = [float((sig_mask := bool(sigma_mask)))] * 9
+            conv_values[5] = 1 / clamp(sigma_mask, 0, 1) if sig_mask else 1
+
+            mask = mask.std.Convolution(conv_values, planes=planes)
 
         if show_mask:
             return mask
