@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Sequence, final
 
 from vsaa import Nnedi3
 from vsexprtools import ExprOp, aka_expr_available, combine, norm_expr
@@ -9,9 +9,9 @@ from vsmasktools import EdgeDetect, Morpho, Robinson3, XxpandMode, grow_mask
 from vsrgtools import box_blur, contrasharpening, contrasharpening_dehalo, repair
 from vsrgtools.util import norm_rmode_planes
 from vstools import (
-    ColorRange, ConvMode, CustomIndexError, CustomValueError, FuncExceptT, InvalidColorFamilyError, PlanesT,
-    check_variable, clamp, cround, disallow_variable_format, disallow_variable_resolution, fallback, get_peak_value,
-    join, mod4, normalize_planes, normalize_seq, scale_value, split, to_arr, vs
+    ColorRange, ConvMode, CustomIndexError, CustomIntEnum, CustomValueError, FuncExceptT, InvalidColorFamilyError,
+    PlanesT, check_variable, clamp, cround, disallow_variable_format, disallow_variable_resolution, fallback,
+    get_peak_value, join, mod4, normalize_planes, normalize_seq, scale_value, split, to_arr, vs
 )
 
 __all__ = [
@@ -24,13 +24,29 @@ __all__ = [
 FloatIterArr = float | list[float] | tuple[float | list[float], ...]
 
 
+@final
+class FineDehaloMask(CustomIntEnum):
+    MAIN = 1
+    EDGES = 3
+    SHARP_EDGES = 4
+    LARGE_EDGES = 6
+    IGNORE_DETAILS = 5
+    SHRINK = 2
+    SHRINK_EDGES_EXCL = 7
+
+
 class _fine_dehalo:
+    @property
+    def Masks(self) -> type[FineDehaloMask]:
+        return FineDehaloMask
+
     def __call__(
         self, clip: vs.VideoNode, rx: FloatIterArr = 2.0, ry: FloatIterArr | None = None, darkstr: FloatIterArr = 0.0,
         brightstr: FloatIterArr = 1.0, lowsens: FloatIterArr = 50.0, highsens: FloatIterArr = 50.0,
         thmi: int = 80, thma: int = 128, thlimi: int = 50, thlima: int = 100, sigma_mask: float | bool = False,
         ss: FloatIterArr = 1.5, contra: int | float | bool = 0.0, exclude: bool = True,
-        edgeproc: float = 0.0, edgemask: EdgeDetect = Robinson3(), planes: PlanesT = 0, show_mask: int | bool = False,
+        edgeproc: float = 0.0, edgemask: EdgeDetect = Robinson3(), planes: PlanesT = 0,
+        show_mask: int | FineDehaloMask | bool = False,
         mask_radius: int = 1, downscaler: ScalerT = Mitchell, upscaler: ScalerT = BSpline,
         supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell, pre_ss: float = 1.0,
         pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift), pre_downscaler: ScalerT = Point,
@@ -169,7 +185,7 @@ class _fine_dehalo:
 
         # Masking #
         if show_mask:
-            return [mask, shrink, edges, strong, light, large, shr_med][show_mask - 1]
+            return [mask, shrink, edges, strong, light, large, shr_med][int(show_mask) - 1]
 
         dehaloed = dehalo_alpha(
             work_clip, rx, ry, darkstr, brightstr, lowsens, highsens, sigma_mask, ss, planes, False, mask_radius,
@@ -195,7 +211,7 @@ class _fine_dehalo:
         self, clip: vs.VideoNode, dehaloed: vs.VideoNode | None = None,
         rx: int = 1, ry: int | None = None, thmi: int = 50, thma: int = 100, thlimi: int = 80, thlima: int = 100,
         exclude: bool = True, edgeproc: float = 0.0, edgemask: EdgeDetect = Robinson3(),
-        get_mask: int = 1, planes: PlanesT = 0, first_plane: bool = False, func: FuncExceptT | None = None
+        mask: int | FineDehaloMask = 1, planes: PlanesT = 0, first_plane: bool = False, func: FuncExceptT | None = None
     ) -> vs.VideoNode:
         """
         :param clip:                Source clip.
@@ -220,7 +236,7 @@ class _fine_dehalo:
 
         dehalo_mask = self(
             clip, rx, ry, thmi=thmi, thma=thma, thlimi=thlimi, thlima=thlima, exclude=exclude,
-            edgeproc=edgeproc, edgemask=edgemask, planes=planes, show_mask=get_mask, func=func or self.mask
+            edgeproc=edgeproc, edgemask=edgemask, planes=planes, show_mask=mask, func=func or self.mask
         )
 
         if dehaloed:
