@@ -355,9 +355,13 @@ def fine_dehalo2(
     op = '' if dark is None else ExprOp.MAX if dark else ExprOp.MIN
 
     if aka_expr_available and mask_h and mask_v and clip.format.sample_type is vs.FLOAT:
-        dehaloed = norm_expr(
-            [work_clip, fix_h, fix_v, mask_h, mask_v, clip], f'x 1 a - * y a * + 1 b - * z b * + c {op}', planes
-        )
+        d_clips = [work_clip, fix_h, fix_v, mask_h, mask_v]
+        d_expr = 'x 1 a - * y a * + 1 b - * z b * +'
+
+        if op:
+            d_clips, d_expr = [*d_clips, clip], f'{d_expr} x {op}'
+
+        dehaloed = norm_expr(d_clips, d_expr, planes)
     else:
         for fix, mask in [(fix_h, mask_v), (fix_v, mask_h)]:
             if mask:
