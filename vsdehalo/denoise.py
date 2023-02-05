@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 from math import ceil
-from typing import Any, Literal
 
 from vsaa import Nnedi3
-from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC, Prefilter
-from vsexprtools import ExprToken, norm_expr, norm_expr_planes
+from vsdenoise import Prefilter
+from vsexprtools import ExprOp, ExprToken, norm_expr
 from vskernels import NoShift, Point, Scaler, ScalerT
 from vsmasktools import Morpho, Prewitt
-from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair
+from vsrgtools import LimitFilterMode, bilateral, contrasharpening, contrasharpening_dehalo, limit_filter, repair
 from vstools import (
-    FunctionUtil, PlanesT, check_ref_clip, core, depth, disallow_variable_format, disallow_variable_resolution,
-    fallback, get_depth, get_y, mod4, normalize_planes, scale_value, vs
+    FunctionUtil, KwargsT, MatrixT, PlanesT, check_ref_clip, check_variable, core, fallback, get_y, mod4, scale_value,
+    vs
 )
 
 __all__ = [
@@ -20,15 +19,11 @@ __all__ = [
 ]
 
 
-@disallow_variable_format
-@disallow_variable_resolution
 def bidehalo(
-    clip: vs.VideoNode,
-    sigma: float = 1.5, radius: float = 7,
+    clip: vs.VideoNode, sigma: float = 1.5, radius: float = 7,
     sigma_final: float | None = None, radius_final: float | None = None,
-    tr: int = 2, cuda: bool | Literal['rtc'] = False,
-    planes: PlanesT = 0, matrix: int | vs.MatrixCoefficients | None = None,
-    bm3d_args: dict[str, Any] | None = None, bilateral_args: dict[str, Any] | None = None
+    tr: int = 2, gpu: bool | None = None, matrix: MatrixT | None = None, planes: PlanesT = 0,
+    bm3d_args: KwargsT | None = None, bilateral_args: KwargsT | None = None
 ) -> vs.VideoNode:
     """
     Simple dehalo function that uses ``bilateral`` and ``BM3D`` to remove bright haloing around edges.
@@ -42,80 +37,41 @@ def bidehalo(
     Recommend values for `sigma` are between 0.8 and 2.0.
     Recommend values for `radius` are between 5 and 15.
 
-    Dependencies:
-
-    * VapourSynth-Bilateral (Default)
-    * VapourSynth-BilateralGPU (Cuda)
-    * VapourSynth-BilateralGPU_RTC (RTC)
-    * vsdenoise
-
     :param clip:                Clip to process.
     :param sigma:               ``Bilateral`` spatial weight sigma.
+    :param radius:              ``Bilateral`` radius weight sigma.
     :param sigma_final:         Final ``Bilateral`` call's spatial weight sigma.
                                 You'll want this to be much weaker than the initial `sigma`.
                                 If `None`, 1/3rd of `sigma`.
-    :param radius:              ``Bilateral`` radius weight sigma.
     :param radius_final:        Final ``Bilateral`` radius weight sigma.
                                 if `None`, same as `radius`.
     :param tr:                  Temporal radius for BM3D
-    :param cuda:                Use ``BM3DCUDA`` and `BilateralGPU` if True, else ``BM3DCPU`` and `Bilateral`.
-                                Also accepts 'rtc' for ``BM3DRTC`` and `BilateralGPU_RTC`.
-                                Notice: final pass of bilateral will always be on cpu since the
-                                gpu implementation doesn't support passing ``ref``.
+    :param gpu:                 Whether to process with GPU or not. None is auto.
+    :param matrix:              Matrix parameter for BM3D YUV/RGB/OPP conversion.
     :param planes:              Specifies which planes will be processed.
-                                Any unprocessed planes will be simply copied.
     :param bm3d_args:           Additional parameters to pass to BM3D.
     :param bilateral_args:      Additional parameters to pass to Bilateral.
 
     :return:                    Dehalo'd clip using ``BM3D`` and ``Bilateral``.
     """
-    assert clip.format
 
-    bits = get_depth(clip)
+    assert check_variable(clip, bidehalo)
 
-    bm3d_args = bm3d_args or dict[str, Any]()
-    bilateral_args = bilateral_args or dict[str, Any]()
+    bm3d_args, bilateral_args = bm3d_args or KwargsT(), bilateral_args or KwargsT()
 
     sigma_final = fallback(sigma_final, sigma / 3)
     radius_final = fallback(radius_final, radius)
 
-    planes = normalize_planes(clip, planes)
+    cuda = fallback(gpu, hasattr(core, 'bm3dcuda'))
 
-    if matrix:
-        clip = clip.std.SetFrameProp('_Matrix', int(matrix))
+    den = Prefilter.BM3D(
+        clip, planes, sigma=[10.0, 8.0] if cuda else [8.0, 6.4], radius=tr, gpu=cuda, matrix=matrix, **bm3d_args
+    )
 
-    process_chroma = 1 in planes or 2 in planes
+    ref = bilateral(den, sigma, radius / 255, planes=planes, **bilateral_args)
+    bidh = bilateral(den, sigma_final, radius_final / 255, ref, planes=planes, **bilateral_args)
 
-    if not cuda:
-        sigma_luma, sigma_chroma = 8, process_chroma and 6.4
-    else:
-        sigma_luma, sigma_chroma = 10, process_chroma and 8
-
-    bm3d_pargs = (depth(clip, 16), [sigma_luma, sigma_chroma], tr)
-
-    if cuda is False:
-        try:
-            den = BM3D(*bm3d_pargs, **bm3d_args).clip
-        except AttributeError:
-            den = BM3DCPU(*bm3d_pargs, **bm3d_args).clip
-
-        ref = den.bilateral.Bilateral(None, sigma, radius / 255, planes, **bilateral_args)
-    else:
-        bil_gpu_args = dict[str, Any](sigma_spatial=sigma, **bilateral_args)
-
-        if cuda is True:
-            den = BM3DCuda(*bm3d_pargs, **bm3d_args).clip
-            ref = den.bilateralgpu.Bilateral(**bil_gpu_args)
-        elif cuda == 'rtc':
-            den = BM3DCudaRTC(*bm3d_pargs, **bm3d_args).clip
-            ref = den.bilateralgpu_rtc.Bilateral(**bil_gpu_args)
-        else:
-            raise ValueError(f'bidehalo: Invalid cuda selection ({cuda})!')
-
-    bidh = den.bilateral.Bilateral(ref, sigma_final, radius_final / 255, planes, **bilateral_args)
-    bidh = depth(bidh, bits)
-
-    return core.std.Expr([clip, bidh], norm_expr_planes(clip, 'x y min', planes))
+    return ExprOp.MIN(clip, bidh, planes=planes)
 
 
 def smooth_dering(
