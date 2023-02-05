@@ -249,10 +249,12 @@ fine_dehalo = _fine_dehalo()
 
 
 def fine_dehalo2(
-    clip: vs.VideoNode, mode: ConvMode = ConvMode.SQUARE,
-    radius: int = 2, dark: bool | None = True,
+    clip: vs.VideoNode,
+    mode: ConvMode = ConvMode.SQUARE,
+    radius: int = 2, mask_radius: int = 2,
     brightstr: float = 1.0, darkstr: float = 1.0,
-    planes: PlanesT = 0, show_mask: bool = False
+    dark: bool | None = True, planes: PlanesT = 0,
+    show_mask: bool = False
 ) -> vs.VideoNode:
     """
     Halo removal function for 2nd order halos.
@@ -260,10 +262,11 @@ def fine_dehalo2(
     :param clip:        Source clip.
     :param mode:        Horizontal/Vertical or both ways.
     :param radius:      Radius for mask growing.
+    :param radius:  Radius for the fixing convolution.
+    :param brightstr:   Strength factor for bright halos.
+    :param darkstr:     Strength factor for dark halos.
     :param dark:        Whether to filter for dark or bright haloing.
                         None for disable merging with source clip.
-    :param brightstr:           Strength factor for bright halos.
-    :param darkstr:             Strength factor for dark halos.
     :param planes:      Planes to process.
     :param show_mask:   Whether to return the computed mask.
 
@@ -282,14 +285,14 @@ def fine_dehalo2(
 
     mask_h = mask_v = None
 
+    mask_h_conv = [1, 2, 1, 0, 0, 0, -1, -2, -1]
+    mask_v_conv = [1, 0, -1, 2, 0, -2, 1, 0, -1]
+
     # intended to be reversed
     if aka_expr_available:
         h_mexpr, v_mexpr = [
             ExprOp.convolution('x', coord, None, 4, False)
-            for coord in [
-                [[1, 2, 1], [0, 0, 0], [-1, -2, -1]],
-                [[1, 0, -1], [2, 0, -2], [1, 0, -1]]
-            ]
+            for coord in (mask_h_conv, mask_v_conv)
         ]
 
         if mode == ConvMode.SQUARE:
@@ -309,10 +312,10 @@ def fine_dehalo2(
         ]
     else:
         if mode in {ConvMode.SQUARE, ConvMode.VERTICAL}:
-            mask_h = work_clip.std.Convolution([1, 2, 1, 0, 0, 0, -1, -2, -1], None, 4, planes, False)
+            mask_h = work_clip.std.Convolution(mask_h_conv, None, 4, planes, False)
 
         if mode in {ConvMode.SQUARE, ConvMode.HORIZONTAL}:
-            mask_v = work_clip.std.Convolution([1, 0, -1, 2, 0, -2, 1, 0, -1], None, 4, planes, False)
+            mask_v = work_clip.std.Convolution(mask_v_conv, None, 4, planes, False)
 
         if mask_h and mask_v:
             mask_h2 = norm_expr([mask_h, mask_v], 'x 3 * y -', planes)
@@ -327,18 +330,22 @@ def fine_dehalo2(
             mask_h = mask_h and mask_h.std.Limiter(planes=planes)
             mask_v = mask_v and mask_v.std.Limiter(planes=planes)
 
+    fix_weights = list(range(-1, -radius - 1, -1))
+    fix_rweights = list(reversed(fix_weights))
+    fix_zeros, fix_mweight = [0] * radius, 10 * (radius + 2)
+
+    fix_h_conv = [*fix_weights, *fix_zeros, fix_mweight, *fix_zeros, *fix_rweights]
+    fix_v_conv = [*fix_rweights, *fix_zeros, fix_mweight, *fix_zeros, *fix_weights]
+
     fix_h, fix_v = [
         norm_expr(work_clip, ExprOp.convolution('x', coord, mode=mode), planes)
         if aka_expr_available else
         work_clip.std.Convolution(coord, planes=planes, mode=mode)
-        for coord, mode in [
-            ([-1, -2, 0, 0, 40, 0, 0, -2, -1], ConvMode.HORIZONTAL),
-            ([-2, -1, 0, 0, 40, 0, 0, -1, -2], ConvMode.VERTICAL)
-        ]
+        for coord, mode in [(fix_h_conv, ConvMode.HORIZONTAL), (fix_v_conv, ConvMode.VERTICAL)]
     ]
 
     mask_h, mask_v = [
-        grow_mask(mask, radius, 1.8, planes, coordinates=coord) if mask else None
+        grow_mask(mask, mask_radius, 1.8, planes, coordinates=coord) if mask else None
         for mask, coord in [
             (mask_h, [0, 1, 0, 0, 0, 0, 1, 0]), (mask_v, [0, 0, 0, 1, 1, 0, 0, 0])
         ]
