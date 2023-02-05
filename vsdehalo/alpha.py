@@ -250,7 +250,9 @@ fine_dehalo = _fine_dehalo()
 
 def fine_dehalo2(
     clip: vs.VideoNode, mode: ConvMode = ConvMode.SQUARE,
-    radius: int = 2, dark: bool | None = True, planes: PlanesT = 0, show_mask: bool = False
+    radius: int = 2, dark: bool | None = True,
+    brightstr: float = 1.0, darkstr: float = 1.0,
+    planes: PlanesT = 0, show_mask: bool = False
 ) -> vs.VideoNode:
     """
     Halo removal function for 2nd order halos.
@@ -260,6 +262,8 @@ def fine_dehalo2(
     :param radius:      Radius for mask growing.
     :param dark:        Whether to filter for dark or bright haloing.
                         None for disable merging with source clip.
+    :param brightstr:           Strength factor for bright halos.
+    :param darkstr:             Strength factor for dark halos.
     :param planes:      Planes to process.
     :param show_mask:   Whether to return the computed mask.
 
@@ -369,6 +373,12 @@ def fine_dehalo2(
 
         if op:
             dehaloed = combine([work_clip, dehaloed], ExprOp(op))
+
+    if darkstr != brightstr != 1.0:
+        dehaloed = norm_expr(
+            [work_clip, dehaloed], 'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?', planes,
+            darkstr=darkstr, brightstr=brightstr
+        )
 
     if not chroma:
         return dehaloed
