@@ -10,14 +10,13 @@ from vskernels import NoShift, Point, Scaler, ScalerT
 from vsmasktools import Morpho, Prewitt
 from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair
 from vstools import (
-    FunctionUtil, PlanesT, check_ref_clip, copy_signature, core, depth, disallow_variable_format,
-    disallow_variable_resolution, fallback, get_depth, get_y, mod4, normalize_planes, scale_value, vs
+    FunctionUtil, PlanesT, check_ref_clip, core, depth, disallow_variable_format, disallow_variable_resolution,
+    fallback, get_depth, get_y, mod4, normalize_planes, scale_value, vs
 )
 
 __all__ = [
     'bidehalo',
-    'smooth_dering',
-    'HQDeringmod'
+    'smooth_dering'
 ]
 
 
@@ -246,10 +245,3 @@ def smooth_dering(
         dering = pre_downscaler.scale(work_clip, clip.width, clip.height)
 
     return func.return_clip(dering)
-
-
-@copy_signature(smooth_dering)
-def HQDeringmod(*args: Any, **kwargs: Any) -> Any:
-    import warnings
-    warnings.warn('HQDeringmod is deprecated! Use smooth_dering!', DeprecationWarning)
-    return smooth_dering(*args, **kwargs)
