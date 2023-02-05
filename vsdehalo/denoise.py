@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 from math import ceil
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
+from vsaa import Nnedi3
 from vsdenoise import BM3D, BM3DCPU, BM3DCuda, BM3DCudaRTC, Prefilter
 from vsexprtools import ExprToken, norm_expr, norm_expr_planes
-from vskernels import ScalerT, NoShift, Point, Scaler
+from vskernels import NoShift, Point, Scaler, ScalerT
 from vsmasktools import Morpho, Prewitt
 from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair
-from vsaa import Nnedi3
 from vstools import (
-    PlanesT, core, depth, disallow_variable_format, disallow_variable_resolution, fallback, get_depth,
-    get_y, mod4, normalize_planes, normalize_seq, scale_value, vs, check_ref_clip, copy_signature,
-    FunctionUtil
+    FunctionUtil, PlanesT, check_ref_clip, copy_signature, core, depth, disallow_variable_format,
+    disallow_variable_resolution, fallback, get_depth, get_y, mod4, normalize_planes, scale_value, vs
 )
 
 __all__ = [
@@ -122,15 +121,13 @@ def bidehalo(
 
 def smooth_dering(
     clip: vs.VideoNode,
-    smooth: vs.VideoNode | Prefilter | tuple[Prefilter, Prefilter] = Prefilter.MINBLUR1,
+    smooth: vs.VideoNode | Prefilter = Prefilter.MINBLUR1,
     ringmask: vs.VideoNode | None = None,
     mrad: int = 1, msmooth: int = 1, minp: int = 1, mthr: int = 60, incedge: bool = False,
     thr: int = 12, elast: float = 2.0, darkthr: int | None = None,
-    sigma: float = 128.0, sigma2: float | None = None,
-    sbsize: int | None = None, sosize: int | None = None,
     contra: int | float | bool = 1.2, drrep: int = 13, pre_ss: float = 1.0,
     pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift),
-    pre_downscaler: ScalerT = Point, planes: PlanesT = 0, show_mask: bool = False, **kwargs: Any
+    pre_downscaler: ScalerT = Point, planes: PlanesT = 0, show_mask: bool = False
 ) -> vs.VideoNode:
     """
     :param clip:        Clip to process.
@@ -168,10 +165,6 @@ def smooth_dering(
                             ``thr=8``,   ``darkthr=0``  : limit darkening with 8, brightening is limited to 0
                             ``thr=255``, ``darkthr=0``  : limit darkening with 255, brightening is limited to 0
                             For the last two examples, output will remain unchanged. (0/255: no limiting)
-    :param sigma:       DFTTest Prefilter only: sigma for medium frequecies
-    :param sigma2:      DFTTest Prefilter only: sigma for low&high frequecies
-    :param sbsize:      DFTTest Prefilter only: length of the sides of the spatial window
-    :param sosize:      DFTTest Prefilter only: spatial overlap amount
     :param contra:      Whether to use contra-sharpening to resharp deringed clip:
                             False: no contrasharpening
                             True: auto radius for contrasharpening
@@ -200,55 +193,30 @@ def smooth_dering(
 
     rep_dr = [drrep if i in planes else 0 for i in range(work_clip.format.num_planes)]
 
-    # Kernel: Smoothing
     if not isinstance(smooth, vs.VideoNode):
-        sigma2 = fallback(sigma2, sigma / 16)
-        sbsize = fallback(sbsize, 8 if func.is_hd else 6)
-        sosize = fallback(sosize, 6 if func.is_hd else 4)
-
-        smoothy, smoothc = cast(tuple[Prefilter, Prefilter], normalize_seq(smooth, 2))
-
-        def _get_kwargs(pref: Prefilter) -> dict[str, Any]:
-            if pref != Prefilter.DFTTEST:
-                return kwargs
-            return kwargs | dict(
-                sbsize=sbsize, sosize=sosize, tbsize=1, slocation=[
-                    0.0, sigma2, 0.05, sigma, 0.5, sigma, 0.75, sigma2, 1.0, 0.0
-                ])
-
-        if smoothy == smoothc or func.luma_only == 1:
-            smoothed = smoothy(work_clip, planes, **_get_kwargs(smoothy))
-        else:
-            smoothed = core.std.ShufflePlanes([
-                smoothy(work_clip, 0, **_get_kwargs(smoothy)),
-                smoothc(work_clip, list(set(planes) - {0}), **_get_kwargs(smoothc))
-            ], [0, 1, 2], vs.YUV)
+        smoothed = smooth(work_clip, planes)  # type: ignore
     else:
         check_ref_clip(clip, smooth)  # type: ignore
 
         smoothed = get_y(smooth) if func.luma_only else smooth  # type: ignore
 
-    # Post-Process: Contra-Sharpening
     if contra:
         if isinstance(contra, int):
             smoothed = contrasharpening(smoothed, work_clip, contra, 13, planes)
         else:
             smoothed = contrasharpening_dehalo(smoothed, work_clip, contra, planes=planes)
 
-    # Post-Process: Repairing
     if set(rep_dr) != {0}:
         repclp = repair(work_clip, smoothed, drrep)
     else:
         repclp = work_clip
 
-    # Post-Process: Limiting
     limitclp = limit_filter(
         repclp, work_clip, None, LimitFilterMode.CLAMPING, planes, thr, elast, darkthr
     )
 
     if ringmask is None:
-        # FIXME: <= instead of < for lthr, Vardë?
-        prewittm = Prewitt.edgemask(work_clip, scale_value(mthr, 8, work_clip) + 1)
+        prewittm = Prewitt.edgemask(work_clip, scale_value(mthr, 8, work_clip))
 
         fmask = prewittm.std.Median(planes).misc.Hysteresis(prewittm, planes)  # type: ignore
 
