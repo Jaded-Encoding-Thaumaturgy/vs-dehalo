@@ -315,8 +315,9 @@ def fine_dehalo2(
             mask_v = work_clip.std.Convolution([1, 0, -1, 2, 0, -2, 1, 0, -1], None, 4, planes, False)
 
         if mask_h and mask_v:
-            mask_h = norm_expr([mask_h, mask_v], 'x 3 * y -', planes)
-            mask_v = norm_expr([mask_v, mask_h], 'x 3 * y -', planes)
+            mask_h2 = norm_expr([mask_h, mask_v], 'x 3 * y -', planes)
+            mask_v2 = norm_expr([mask_v, mask_h], 'x 3 * y -', planes)
+            mask_h, mask_v = mask_h2, mask_v2
         elif mask_h:
             mask_h = norm_expr(mask_h, 'x 3 *', planes)
         elif mask_v:
