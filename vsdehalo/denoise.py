@@ -173,7 +173,7 @@ def smooth_dering(
     if ringmask is None:
         prewittm = Prewitt.edgemask(work_clip, scale_value(mthr, 8, work_clip))
 
-        fmask = prewittm.std.Median(planes).misc.Hysteresis(prewittm, planes)  # type: ignore
+        fmask = prewittm.std.Median(planes).misc.Hysteresis(prewittm, planes)
 
         omask = Morpho.expand(fmask, mrad, mrad, planes=planes) if mrad > 0 else fmask
 
