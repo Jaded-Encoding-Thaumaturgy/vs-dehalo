@@ -102,9 +102,9 @@ class _fine_dehalo:
 
 
         """
-        assert check_variable(clip, fine_dehalo)
+        func = func or 'fine_dehalo'
 
-        func = func or fine_dehalo
+        assert check_variable(clip, func)
 
         InvalidColorFamilyError.check(clip, (vs.GRAY, vs.YUV), func)
 
