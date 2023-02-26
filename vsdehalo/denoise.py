@@ -4,74 +4,15 @@ from math import ceil
 
 from vsaa import Nnedi3
 from vsdenoise import Prefilter
-from vsexprtools import ExprOp, ExprToken, norm_expr
+from vsexprtools import ExprToken, norm_expr
 from vskernels import NoShift, Point, Scaler, ScalerT
 from vsmasktools import Morpho, Prewitt
-from vsrgtools import LimitFilterMode, bilateral, contrasharpening, contrasharpening_dehalo, limit_filter, repair
-from vstools import (
-    FunctionUtil, KwargsT, MatrixT, PlanesT, check_ref_clip, check_variable, core, fallback, mod4, plane, scale_value,
-    vs
-)
+from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair
+from vstools import FunctionUtil, PlanesT, check_ref_clip, fallback, mod4, plane, scale_value, vs
 
 __all__ = [
-    'bidehalo',
     'smooth_dering'
 ]
-
-
-def bidehalo(
-    clip: vs.VideoNode, sigma: float = 1.5, radius: float = 7,
-    sigma_final: float | None = None, radius_final: float | None = None,
-    tr: int = 2, gpu: bool | None = None, matrix: MatrixT | None = None, planes: PlanesT = 0,
-    bm3d_args: KwargsT | None = None, bilateral_args: KwargsT | None = None
-) -> vs.VideoNode:
-    """
-    Simple dehalo function that uses ``bilateral`` and ``BM3D`` to remove bright haloing around edges.
-
-    This works by utilising the ``ref`` parameter in ``bilateral`` to limit the areas that get damaged,
-    and how much it gets damaged. You should use this function in conjunction with a halo mask.
-
-    If a ref clip is passed, that will be used as a ref for the second bilateral pass instead of a blurred clip.
-    Both clips will be resampled to 16bit internally, and returned in the input bitdepth.
-
-    Recommend values for `sigma` are between 0.8 and 2.0.
-    Recommend values for `radius` are between 5 and 15.
-
-    :param clip:                Clip to process.
-    :param sigma:               ``Bilateral`` spatial weight sigma.
-    :param radius:              ``Bilateral`` radius weight sigma.
-    :param sigma_final:         Final ``Bilateral`` call's spatial weight sigma.
-                                You'll want this to be much weaker than the initial `sigma`.
-                                If `None`, 1/3rd of `sigma`.
-    :param radius_final:        Final ``Bilateral`` radius weight sigma.
-                                if `None`, same as `radius`.
-    :param tr:                  Temporal radius for BM3D
-    :param gpu:                 Whether to process with GPU or not. None is auto.
-    :param matrix:              Matrix parameter for BM3D YUV/RGB/OPP conversion.
-    :param planes:              Specifies which planes will be processed.
-    :param bm3d_args:           Additional parameters to pass to BM3D.
-    :param bilateral_args:      Additional parameters to pass to Bilateral.
-
-    :return:                    Dehalo'd clip using ``BM3D`` and ``Bilateral``.
-    """
-
-    assert check_variable(clip, bidehalo)
-
-    bm3d_args, bilateral_args = bm3d_args or KwargsT(), bilateral_args or KwargsT()
-
-    sigma_final = fallback(sigma_final, sigma / 3)
-    radius_final = fallback(radius_final, radius)
-
-    cuda = fallback(gpu, hasattr(core, 'bm3dcuda'))
-
-    den = Prefilter.BM3D(
-        clip, planes, sigma=[10.0, 8.0] if cuda else [8.0, 6.4], radius=tr, gpu=cuda, matrix=matrix, **bm3d_args
-    )
-
-    ref = bilateral(den, sigma, radius / 255, planes=planes, **bilateral_args)
-    bidh = bilateral(den, sigma_final, radius_final / 255, ref, planes=planes, **bilateral_args)
-
-    return ExprOp.MIN(clip, bidh, planes=planes)
 
 
 def smooth_dering(
