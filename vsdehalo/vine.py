@@ -7,16 +7,14 @@ from functools import partial
 from math import log
 from typing import Any
 
-from vsdenoise import (
-    CCDMode, CCDPoints, ChannelMode, MotionMode, MVTools, PelType, Prefilter, SearchMode, ccd, knl_means_cl
-)
-from vsexprtools import norm_expr_planes
+from vsdenoise import CCDMode, CCDPoints, MotionMode, MVTools, PelType, Prefilter, SearchMode, ccd, nl_means
+from vsexprtools import ExprOp, norm_expr_planes
 from vskernels import Bicubic
 from vsmasktools import Morpho
 from vsrgtools import contrasharpening_dehalo, gauss_blur, gauss_fmtc_blur, lehmer_diff_merge
 from vstools import (
-    Matrix, PlanesT, check_ref_clip, core, disallow_variable_format, disallow_variable_resolution, get_y, join,
-    normalize_planes, split, vs
+    CustomIndexError, CustomRuntimeError, MatrixT, PlanesT, ResampleUtil, check_ref_clip, check_variable, core, get_y,
+    join, normalize_planes, split, vs
 )
 
 from .alpha import fine_dehalo
@@ -26,10 +24,8 @@ __all__ = [
 ]
 
 
-@disallow_variable_format
-@disallow_variable_resolution
 def super_clip(src: vs.VideoNode, pel: int = 1, planes: PlanesT = 0) -> vs.VideoNode:
-    assert src.format
+    assert check_variable(src, super_clip)
 
     if planes == [1, 2] and (src.format.subsampling_w or src.format.subsampling_h):
         src = src.resize.Bicubic(
@@ -43,44 +39,46 @@ def super_clip(src: vs.VideoNode, pel: int = 1, planes: PlanesT = 0) -> vs.Video
     return PelType.NNEDI3(src, pel, nns=4, qual=2, etype=1)
 
 
-@disallow_variable_format
-@disallow_variable_resolution
 def smooth_clip(
     src: vs.VideoNode, sr: int = 32, strength: float = 12.5,
     sharp: float = 0.80, cutoff: int = 4,
     aggressive: bool = True, fast: bool = False,
-    matrix: int | Matrix | None = None,
+    matrix: MatrixT | None = None,
     pel_type: PelType = PelType.BICUBIC,
     planes: PlanesT = 0
 ) -> vs.VideoNode:
-    assert src.format
+    assert check_variable(src, smooth_clip)
+
+    resampler = ResampleUtil(True)
 
     if sr < 1:
-        raise RuntimeError('vine.smooth_clip: sr has to be greater than 0!')
+        raise CustomIndexError('"sr" has to be greater than 0!', smooth_clip)
 
     if strength <= 0:
-        raise RuntimeError('vine.smooth_clip: strength has to be greater than 0!')
+        raise CustomIndexError('"strength" has to be greater than 0!', smooth_clip)
 
     if sharp <= 0.0:
-        raise RuntimeError('vine.smooth_clip: sharp has to be greater than 0!')
+        raise CustomIndexError('"sharp" has to be greater than 0!', smooth_clip)
 
     if cutoff < 1 or cutoff > 100:
-        raise RuntimeError('vine.smooth_clip: cutoff must fall in (0, 100]!')
+        raise CustomIndexError('"cutoff" must fall in (0, 100]!', smooth_clip)
 
     csp = src.format.color_family
     planes = normalize_planes(src, planes)
 
     if fast and csp == vs.GRAY:
-        raise ValueError('vine.smooth_clip: fast=True is available only for YUV and RGB input!')
+        raise CustomRuntimeError('fast=True is available only for YUV and RGB input!', smooth_clip)
 
     work_clip = src
 
     if csp == vs.RGB:
-        work_clip = work_clip.bm3d.RGB2OPP(1)
+        work_clip = resampler.rgb2opp(work_clip)  # type: ignore
 
-    work_clip, *chroma = split(work_clip) if planes == [0] and not fast else (work_clip, )
+    work_clip, *chroma = split(work_clip) if planes == [0] and not fast else (work_clip, )  # type: ignore
+
     assert work_clip.format
 
+    # joy
     c1 = 0.3926327792690057290863679493724 * sharp
     c2 = 18.880334973195822973214959957208
     c3 = 0.5862453661304626725671053478676
@@ -91,8 +89,6 @@ def smooth_clip(
 
     upsampled = pel_type(work_clip, 2)
 
-    knl_channels = ChannelMode.from_planes(planes)
-
     if fast:
         upsampled = ccd(
             upsampled, strength * 2, 0, None,
@@ -101,7 +97,7 @@ def smooth_clip(
         )
         upsampled = gauss_blur(upsampled, 1.45454, planes=planes)
     else:
-        upsampled = knl_means_cl(upsampled, strength, 0, sr, 0, knl_channels)
+        upsampled = nl_means(upsampled, strength, 0, sr, 0, planes=planes)
 
     c = 0 if pel_type == PelType.NNEDI3 else (1.0 - abs(sharp)) / 2
 
@@ -110,7 +106,7 @@ def smooth_clip(
     if fast:
         resampled = contrasharpening_dehalo(resampled, work_clip, 2.5, planes=planes)
 
-    clean = knl_means_cl(work_clip, strength, 0, sr, 0, knl_channels)
+    clean = nl_means(work_clip, strength, 0, sr, 0, planes=planes)
 
     clean = resampled.std.Merge(
         clean, [weight if i in planes else 0 for i in range(work_clip.format.num_planes)]
@@ -132,28 +128,28 @@ def smooth_clip(
 
     diff = work_clip.std.MakeDiff(clean, planes)
 
-    diff = knl_means_cl(diff, h_smoothine, 0, sr, 1, knl_channels, rclip=clean)
+    diff = nl_means(diff, h_smoothine, 0, sr, 1, planes=planes, rclip=clean)
 
     smooth = clean.std.MergeDiff(diff, planes)
 
     if chroma:
-        smooth = join([smooth, *chroma], vs.YUV)
+        smooth = join(smooth, *chroma)
 
     if csp == vs.RGB:
-        return smooth.bm3d.OPP2RGB(1)
+        return resampler.opp2rgb(smooth)
 
     return smooth
 
 
-@disallow_variable_format
-@disallow_variable_resolution
 def dehalo(
     src: vs.VideoNode, smooth: vs.VideoNode | None = None,
     tr: int = 0, refine: int = 3, pel: int = 1, thSAD: int = 400,
     super_clips: tuple[vs.VideoNode | None, vs.VideoNode | None] = (None, None),
     planes: PlanesT = 0, mask: bool | vs.VideoNode = True
 ) -> vs.VideoNode:
-    assert src.format
+    assert check_variable(src, dehalo)
+
+    resampler = ResampleUtil(True)
 
     if smooth:
         assert smooth.format
@@ -162,10 +158,7 @@ def dehalo(
             raise TypeError('vine.dehalo: smooth must have the same format and size as src!')
 
     if pel not in {1, 2, 4}:
-        raise RuntimeError('vine.dehalo: pel has to be 1, 2 or 4!')
-
-    if thSAD <= 0:
-        raise RuntimeError('vine.dehalo: sad has to be greater than 0!')
+        raise CustomIndexError('"pel" has to be 1, 2 o, r 4!')
 
     csp = src.format.color_family
     planes = normalize_planes(src, planes)
@@ -179,10 +172,10 @@ def dehalo(
     work_clip, smooth_wclip = src, smooth
 
     if csp == vs.RGB:
-        work_clip = work_clip.bm3d.RGB2OPP(1)
-        smooth_wclip = smooth_wclip.bm3d.RGB2OPP(1)
+        work_clip = resampler.rgb2opp(work_clip)  # type: ignore
+        smooth_wclip = resampler.rgb2opp(smooth_wclip)
 
-    work_clip, *chroma = split(work_clip) if planes == [0] else (work_clip, )
+    work_clip, *chroma = split(work_clip) if planes == [0] else (work_clip, )  # type: ignore
     smooth_wclip = get_y(smooth_wclip) if planes == [0] else smooth_wclip
 
     constant = 0.0009948813682897925944723492342
@@ -226,9 +219,7 @@ def dehalo(
 
     averaged_dif = mv.degrain(thSAD=thSAD)
 
-    averaged_dif = core.std.Expr(
-        [averaged_dif, smooth_wclip], norm_expr_planes(work_clip, 'x y min', planes)
-    )
+    averaged_dif = ExprOp.MIN(averaged_dif, smooth_wclip, planes=planes)
 
     clean = work_clip.std.MergeDiff(averaged_dif, planes)
 
@@ -236,9 +227,9 @@ def dehalo(
         clean = work_clip.std.MaskedMerge(clean, halo_mask, planes)  # type: ignore
 
     if chroma:
-        clean = join([clean, *chroma], vs.YUV)
+        clean = join(clean, *chroma)
 
     if csp == vs.RGB:
-        return clean.bm3d.OPP2RGB(1)
+        return resampler.rgb2opp(clean)
 
     return clean
