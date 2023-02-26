@@ -10,8 +10,8 @@ from vsrgtools import box_blur, contrasharpening, contrasharpening_dehalo, repai
 from vsrgtools.util import norm_rmode_planes
 from vstools import (
     ColorRange, ConvMode, CustomIndexError, CustomIntEnum, CustomValueError, FuncExceptT, InvalidColorFamilyError,
-    PlanesT, check_variable, clamp, cround, disallow_variable_format, disallow_variable_resolution, fallback,
-    get_peak_value, join, mod4, normalize_planes, normalize_seq, scale_value, split, to_arr, vs
+    PlanesT, check_variable, clamp, cround, fallback, get_peak_value, join, mod4, normalize_planes, normalize_seq,
+    scale_value, split, to_arr, vs
 )
 
 __all__ = [
@@ -395,8 +395,6 @@ def fine_dehalo2(
     return join([dehaloed, *chroma], clip.format.color_family)
 
 
-@disallow_variable_format
-@disallow_variable_resolution
 def dehalo_alpha(
     clip: vs.VideoNode, rx: FloatIterArr = 2.0, ry: FloatIterArr | None = None, darkstr: FloatIterArr = 0.0,
     brightstr: FloatIterArr = 1.0, lowsens: FloatIterArr = 50.0, highsens: FloatIterArr = 50.0,
