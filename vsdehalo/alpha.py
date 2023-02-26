@@ -193,12 +193,13 @@ class _fine_dehalo:
             mask_coords, func
         )
 
-        if isinstance(contra, float):
-            dehaloed = contrasharpening_dehalo(dehaloed, work_clip, contra, planes=planes)
-        elif contra:
-            dehaloed = contrasharpening(
-                dehaloed, work_clip, None if contra is True else contra, planes=planes
-            )
+        if contra:
+            if isinstance(contra, float):
+                dehaloed = contrasharpening_dehalo(dehaloed, work_clip, contra, planes=planes)
+            else:
+                dehaloed = contrasharpening(
+                    dehaloed, work_clip, None if contra is True else contra, planes=planes
+                )
 
         y_merge = work_clip.std.MaskedMerge(dehaloed, mask, planes)
 
