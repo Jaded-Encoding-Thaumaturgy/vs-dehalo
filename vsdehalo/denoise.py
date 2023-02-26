@@ -9,7 +9,7 @@ from vskernels import NoShift, Point, Scaler, ScalerT
 from vsmasktools import Morpho, Prewitt
 from vsrgtools import LimitFilterMode, bilateral, contrasharpening, contrasharpening_dehalo, limit_filter, repair
 from vstools import (
-    FunctionUtil, KwargsT, MatrixT, PlanesT, check_ref_clip, check_variable, core, fallback, get_y, mod4, scale_value,
+    FunctionUtil, KwargsT, MatrixT, PlanesT, check_ref_clip, check_variable, core, fallback, mod4, plane, scale_value,
     vs
 )
 
@@ -153,7 +153,10 @@ def smooth_dering(
     else:
         check_ref_clip(clip, smooth)  # type: ignore
 
-        smoothed = get_y(smooth) if func.luma_only else smooth  # type: ignore
+        smoothed = plane(smooth, 0) if func.luma_only else smooth  # type: ignore
+
+        if pre_ss > 1.0:
+            smoothed = pre_supersampler.scale(smoothed, work_clip.width, work_clip.height)  # type: ignore
 
     if contra:
         if isinstance(contra, int):
