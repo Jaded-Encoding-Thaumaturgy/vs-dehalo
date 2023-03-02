@@ -587,8 +587,8 @@ def dehalo_alpha(
 def dehalo_sigma(
     clip: vs.VideoNode, brightstr: FloatIterArr = 1.0, darkstr: FloatIterArr = 0.0,
     lowsens: FloatIterArr = 50.0, highsens: FloatIterArr = 50.0, ss: FloatIterArr = 1.5,
-    blur_func: Prefilter = Prefilter.GAUSS, planes: PlanesT = 0, downscaler: ScalerT = Mitchell,
-    upscaler: ScalerT = BSpline, supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell,
+    blur_func: Prefilter = Prefilter.GAUSS, planes: PlanesT = 0,
+    supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell,
     pre_ss: float = 1.0, pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift),
     pre_downscaler: ScalerT = Point, mask_radius: int = 1, sigma_mask: float | bool = False,
     mask_coords: int | tuple[int, ConvMode] | Sequence[int] = 3,
@@ -602,8 +602,6 @@ def dehalo_sigma(
 
     planes = normalize_planes(clip, planes)
 
-    downscaler = Scaler.ensure_obj(downscaler, func)
-    upscaler = Scaler.ensure_obj(upscaler, func)
     pre_supersampler = Scaler.ensure_obj(pre_supersampler, func)
     pre_downscaler = Scaler.ensure_obj(pre_downscaler, func)
 
