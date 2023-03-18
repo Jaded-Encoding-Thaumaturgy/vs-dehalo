@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Sequence, final
 
 from vsaa import Nnedi3
-from vsexprtools import ExprOp, aka_expr_available, combine, norm_expr
+from vsexprtools import ExprOp, complexpr_available, combine, norm_expr
 from vskernels import BSpline, Lanczos, Mitchell, NoShift, Point, Scaler, ScalerT
 from vsmasktools import EdgeDetect, Morpho, Robinson3, XxpandMode, grow_mask
 from vsrgtools import box_blur, contrasharpening, contrasharpening_dehalo, repair
@@ -372,7 +372,7 @@ def fine_dehalo2(
     mask_v_conv = [1, 0, -1, 2, 0, -2, 1, 0, -1]
 
     # intended to be reversed
-    if aka_expr_available:
+    if complexpr_available:
         h_mexpr, v_mexpr = [
             ExprOp.convolution('x', coord, None, 4, False)
             for coord in (mask_h_conv, mask_v_conv)
@@ -422,7 +422,7 @@ def fine_dehalo2(
 
     fix_h, fix_v = [
         norm_expr(work_clip, ExprOp.convolution('x', coord, mode=mode), planes)
-        if aka_expr_available else
+        if complexpr_available else
         work_clip.std.Convolution(coord, planes=planes, mode=mode)
         for coord, mode in [(fix_h_conv, ConvMode.HORIZONTAL), (fix_v_conv, ConvMode.VERTICAL)]
     ]
@@ -449,7 +449,7 @@ def fine_dehalo2(
     dehaloed = work_clip
     op = '' if dark is None else ExprOp.MAX if dark else ExprOp.MIN
 
-    if aka_expr_available and mask_h and mask_v and clip.format.sample_type is vs.FLOAT:
+    if complexpr_available and mask_h and mask_v and clip.format.sample_type is vs.FLOAT:
         d_clips = [work_clip, fix_h, fix_v, mask_h, mask_v]
         d_expr = 'x 1 a - * y a * + 1 b - * z b * +'
 
