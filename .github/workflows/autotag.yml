@@ -3,9 +3,8 @@ on:
   push:
     branches:
       - master
-  pull_request:
-    branches:
-      - master
+    paths:
+      - vsdehalo/_metadata.py
 
 jobs:
   new_version:
