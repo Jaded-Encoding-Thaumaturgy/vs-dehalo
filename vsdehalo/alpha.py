@@ -292,7 +292,7 @@ class _fine_dehalo:
 
     def mask(
         self, clip: vs.VideoNode, dehaloed: vs.VideoNode | None = None,
-        rx: int = 1, ry: int | None = None, thmi: int = 50, thma: int = 100, thlimi: int = 80, thlima: int = 100,
+        rx: int = 1, ry: int | None = None, thmi: int = 50, thma: int = 100, thlimi: int = 50, thlima: int = 100,
         exclude: bool = True, edgeproc: float = 0.0, edgemask: EdgeDetect = Robinson3(),
         mask: int | FineDehaloMask = 1, planes: PlanesT = 0, first_plane: bool = False, func: FuncExceptT | None = None
     ) -> vs.VideoNode:
