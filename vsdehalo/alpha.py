@@ -463,7 +463,7 @@ def fine_dehalo2(
                 dehaloed = dehaloed.std.MaskedMerge(fix, mask)
 
         if op:
-            dehaloed = combine([work_clip, dehaloed], ExprOp(op))
+            dehaloed = combine([work_clip, dehaloed], op)  # type: ignore
 
     if darkstr != brightstr != 1.0:
         dehaloed = _limit_dehalo(work_clip, dehaloed, darkstr, brightstr, planes)
