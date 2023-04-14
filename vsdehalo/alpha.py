@@ -686,13 +686,13 @@ def dehalomicron(
     dehalo_mask = RemoveGrainMode.EDGE_CLIP_STRONG(dehalo_mask)
 
     actual_dehalo = dehalo_sigma(
-        y, pre_ss=1 + pre_ss, sigma=sigma, ss=ss - 0.5 * pre_ss, planes=func.norm_planes, **kwargs
+        func.work_clip, pre_ss=1 + pre_ss, sigma=sigma, ss=ss - 0.5 * pre_ss, planes=func.norm_planes, **kwargs
     )
-    dehalo_ref = fine_dehalo(y, planes=func.norm_planes, **fdhealo_kwargs)
+    dehalo_ref = fine_dehalo(func.work_clip, planes=func.norm_planes, **fdhealo_kwargs)
 
     dehalo_min = ExprOp.MIN(actual_dehalo, dehalo_ref, planes=func.norm_planes)
 
-    dehalo = limit_filter(actual_dehalo, y, dehalo_ref, planes=func.norm_planes)
+    dehalo = limit_filter(actual_dehalo, func.work_clip, dehalo_ref, planes=func.norm_planes)
     dehalo = dehalo.std.MaskedMerge(dehalo_min, dehalo_mask, func.norm_planes)
 
     if isinstance(dampen, tuple):
