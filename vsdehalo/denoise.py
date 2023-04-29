@@ -134,7 +134,7 @@ def smooth_dering(
             else:
                 imask = Morpho.inpand(Morpho.inflate(fmask, 1, planes), ceil(minp / 2), planes=planes)
 
-            ringmask = norm_expr([omask, imask], f'{ExprToken.RangeMax} {ExprToken.RangeMax} y - / x *')
+            ringmask = norm_expr([omask, imask], f'{ExprToken.RangeMax} {ExprToken.RangeMax} y - / x *').std.Limiter()
 
     dering = work_clip.std.MaskedMerge(limitclp, ringmask, planes)
 
