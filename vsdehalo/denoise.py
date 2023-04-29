@@ -19,7 +19,7 @@ def smooth_dering(
     clip: vs.VideoNode,
     smooth: vs.VideoNode | Prefilter = Prefilter.MINBLUR1,
     ringmask: vs.VideoNode | None = None,
-    mrad: int = 1, msmooth: int = 1, minp: int = 1, mthr: int = 60, incedge: bool = False,
+    mrad: int = 1, msmooth: int = 1, minp: int = 1, mthr: float = 0.24, incedge: bool = False,
     thr: int = 12, elast: float = 2.0, darkthr: int | None = None,
     contra: int | float | bool = 1.2, drrep: int = 13, pre_ss: float = 1.0,
     pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift),
@@ -115,7 +115,7 @@ def smooth_dering(
     )
 
     if ringmask is None:
-        prewittm = Prewitt.edgemask(work_clip, scale_value(mthr, 8, work_clip))
+        prewittm = Prewitt.edgemask(work_clip, scale_value(mthr, 32, work_clip))
 
         fmask = prewittm.std.Median(planes).misc.Hysteresis(prewittm, planes)
 
