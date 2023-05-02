@@ -4,11 +4,11 @@ from math import ceil
 
 from vsaa import Nnedi3
 from vsdenoise import Prefilter
-from vsexprtools import ExprToken, norm_expr
+from vsexprtools import ExprOp, ExprToken, norm_expr
 from vskernels import NoShift, Point, Scaler, ScalerT
 from vsmasktools import Morpho, Prewitt
 from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair
-from vstools import FunctionUtil, PlanesT, check_ref_clip, fallback, mod4, plane, scale_value, vs
+from vstools import FunctionUtil, PlanesT, check_ref_clip, fallback, mod4, plane, vs
 
 __all__ = [
     'smooth_dering'
@@ -134,7 +134,9 @@ def smooth_dering(
             else:
                 imask = Morpho.inpand(Morpho.inflate(fmask, 1, planes), ceil(minp / 2), planes=planes)
 
-            ringmask = norm_expr([omask, imask], f'{ExprToken.RangeMax} {ExprToken.RangeMax} y - / x *').std.Limiter()
+            ringmask = norm_expr(
+                [omask, imask], [f'{ExprToken.RangeMax} {ExprToken.RangeMax} y - / x *', ExprOp.clamp()]
+            )
 
     dering = work_clip.std.MaskedMerge(limitclp, ringmask, planes)
 
