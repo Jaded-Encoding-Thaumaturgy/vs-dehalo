@@ -4,11 +4,11 @@ from math import ceil
 
 from vsaa import Nnedi3
 from vsdenoise import Prefilter
-from vsexprtools import ExprToken, norm_expr
+from vsexprtools import ExprOp, ExprToken, norm_expr
 from vskernels import NoShift, Point, Scaler, ScalerT
 from vsmasktools import Morpho, Prewitt
 from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair
-from vstools import FunctionUtil, PlanesT, check_ref_clip, fallback, mod4, plane, scale_value, vs
+from vstools import FunctionUtil, PlanesT, check_ref_clip, fallback, mod4, plane, vs
 
 __all__ = [
     'smooth_dering'
@@ -19,7 +19,7 @@ def smooth_dering(
     clip: vs.VideoNode,
     smooth: vs.VideoNode | Prefilter = Prefilter.MINBLUR1,
     ringmask: vs.VideoNode | None = None,
-    mrad: int = 1, msmooth: int = 1, minp: int = 1, mthr: int = 60, incedge: bool = False,
+    mrad: int = 1, msmooth: int = 1, minp: int = 1, mthr: float = 0.24, incedge: bool = False,
     thr: int = 12, elast: float = 2.0, darkthr: int | None = None,
     contra: int | float | bool = 1.2, drrep: int = 13, pre_ss: float = 1.0,
     pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift),
@@ -115,7 +115,7 @@ def smooth_dering(
     )
 
     if ringmask is None:
-        prewittm = Prewitt.edgemask(work_clip, scale_value(mthr, 8, work_clip))
+        prewittm = Prewitt.edgemask(work_clip, mthr)
 
         fmask = prewittm.std.Median(planes).misc.Hysteresis(prewittm, planes)
 
@@ -134,7 +134,9 @@ def smooth_dering(
             else:
                 imask = Morpho.inpand(Morpho.inflate(fmask, 1, planes), ceil(minp / 2), planes=planes)
 
-            ringmask = norm_expr([omask, imask], f'{ExprToken.RangeMax} {ExprToken.RangeMax} y - / x *')
+            ringmask = norm_expr(
+                [omask, imask], [f'{ExprToken.RangeMax} {ExprToken.RangeMax} y - / x *', ExprOp.clamp()]
+            )
 
     dering = work_clip.std.MaskedMerge(limitclp, ringmask, planes)
 
