@@ -254,7 +254,7 @@ class _fine_dehalo:
         # smoothed by the halo removal.
         shr_med = combine([strong, shrink], ExprOp.MAX, planes=planes) if exclude else strong
 
-        # Substracts masks and amplifies the difference to be sure we get 255
+        # Subtracts masks and amplifies the difference to be sure we get 255
         # on the areas to be processed.
         mask = norm_expr([large, shr_med], 'x y - 2 *', planes)
 
