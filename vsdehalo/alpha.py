@@ -651,7 +651,7 @@ def dehalo_sigma(
 
 
 def dehalomicron(
-    clip: vs.VideoNode, brz: float = 0.75, sigma: float = 1.55, sigma0: float = 1.15, ss: float = 1.65,
+    clip: vs.VideoNode, brz: float = 0.075, sigma: float = 1.55, sigma0: float = 1.15, ss: float = 1.65,
     pre_ss: bool = True, dampen: float | list[float] | tuple[float | list[float], bool | None] = 0.65,
     sigma_ref: float = 4.3333, planes: PlanesT = 0, fdhealo_kwargs: KwargsT | None = None, **kwargs: Any
 ) -> vs.VideoNode:
@@ -672,10 +672,10 @@ def dehalomicron(
     dehalo_mask = RemoveGrainMode.CIRCLE_BLUR(dehalo_mask)
     dehalo_mask = RemoveGrainMode.MINMAX_MEDIAN_OPP(dehalo_mask)
 
-    dmask_expr = 'x 2 *'
-
-    if brz != 0.0:
-        dmask_expr = f"x {scale_value(abs(brz) / 10, 32, y)} {'>' if brz < 0.0 else '>'} 0 {dmask_expr} ?"
+    if brz:
+        dmask_expr = f"x {scale_value(abs(brz), 32, y)} {'>' if brz < 0.0 else '>'} 0 x 2 * ?"
+    else:
+        dmask_expr = 'x 2 *'
 
     dehalo_mask = norm_expr(dehalo_mask, dmask_expr, func.norm_planes)
 
