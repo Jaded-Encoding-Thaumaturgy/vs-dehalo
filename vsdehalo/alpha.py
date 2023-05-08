@@ -653,11 +653,11 @@ def dehalo_sigma(
 def dehalomicron(
     clip: vs.VideoNode, brz: float = 0.075, sigma: float = 1.55, sigma0: float = 1.15, ss: float = 1.65,
     pre_ss: bool = True, dampen: float | list[float] | tuple[float | list[float], bool | None] = 0.65,
-    sigma_ref: float = 4.3333, planes: PlanesT = 0, fdhealo_kwargs: KwargsT | None = None, **kwargs: Any
+    sigma_ref: float = 4.3333, planes: PlanesT = 0, fdehalo_kwargs: KwargsT | None = None, **kwargs: Any
 ) -> vs.VideoNode:
     func = FunctionUtil(clip, dehalomicron, planes, (vs.GRAY, vs.YUV))
 
-    fdhealo_kwargs = KwargsT(edgeproc=0.5, ss=1.5 if pre_ss else 2.0) | (fdhealo_kwargs or {})
+    fdehalo_kwargs = KwargsT(edgeproc=0.5, ss=1.5 if pre_ss else 2.0) | (fdehalo_kwargs or {})
 
     y = get_y(func.work_clip)
 
@@ -688,7 +688,7 @@ def dehalomicron(
     actual_dehalo = dehalo_sigma(
         func.work_clip, pre_ss=1 + pre_ss, sigma=sigma, ss=ss - 0.5 * pre_ss, planes=func.norm_planes, **kwargs
     )
-    dehalo_ref = fine_dehalo(func.work_clip, planes=func.norm_planes, **fdhealo_kwargs)
+    dehalo_ref = fine_dehalo(func.work_clip, planes=func.norm_planes, **fdehalo_kwargs)
 
     dehalo_min = ExprOp.MIN(actual_dehalo, dehalo_ref, planes=func.norm_planes)
 
