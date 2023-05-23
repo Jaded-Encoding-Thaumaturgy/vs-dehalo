@@ -7,11 +7,13 @@ from functools import partial
 from math import log
 from typing import Any
 
-from vsdenoise import CCDMode, CCDPoints, MotionMode, MVTools, PelType, Prefilter, SearchMode, ccd, nl_means
+from vsdenoise import (
+    CCDMode, CCDPoints, MotionMode, MVTools, PelType, Prefilter, SearchMode, ccd, frequency_merge, nl_means
+)
 from vsexprtools import ExprOp, norm_expr_planes
 from vskernels import Bicubic
 from vsmasktools import Morpho
-from vsrgtools import contrasharpening_dehalo, gauss_blur, gauss_fmtc_blur, lehmer_diff_merge
+from vsrgtools import contrasharpening_dehalo, gauss_blur, gauss_fmtc_blur
 from vstools import (
     CustomIndexError, CustomRuntimeError, MatrixT, PlanesT, ResampleUtil, check_ref_clip, check_variable, core, get_y,
     join, normalize_planes, split, vs
@@ -122,8 +124,8 @@ def smooth_clip(
             norm_expr_planes(work_clip, 'y z - x +', planes)
         )
     else:
-        clean = lehmer_diff_merge(
-            gauss_blur(work_clip, 0.5), clean, blur_func, planes=planes  # type: ignore
+        clean = frequency_merge(
+            gauss_blur(work_clip, 0.5), clean, lowpass=blur_func, planes=planes  # type: ignore
         )
 
     diff = work_clip.std.MakeDiff(clean, planes)
