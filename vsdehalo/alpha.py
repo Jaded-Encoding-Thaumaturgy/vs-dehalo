@@ -677,12 +677,10 @@ def dehalomicron(
     else:
         dmask_expr = 'x 2 *'
 
-    dehalo_mask = norm_expr(dehalo_mask, dmask_expr, func.norm_planes)
+    dehalo_mask = norm_expr(dehalo_mask, dmask_expr)
 
-    fine_edge_mask = fine_dehalo.mask(norm_expr([y_mask, ymask_ref0], 'y x -'), planes=func.norm_planes)
-    dehalo_mask = norm_expr(
-        [dehalo_mask, y_mask, ymask_ref0, fine_edge_mask], 'y z + 2 / x < x and x abs a ?', func.norm_planes
-    )
+    fine_edge_mask = fine_dehalo.mask(norm_expr([y_mask, ymask_ref0], 'y x -'))
+    dehalo_mask = norm_expr([dehalo_mask, y_mask, ymask_ref0, fine_edge_mask], 'y z + 2 / x < x and x abs a ?')
     dehalo_mask = RemoveGrainMode.EDGE_CLIP_STRONG(dehalo_mask)
 
     actual_dehalo = dehalo_sigma(
