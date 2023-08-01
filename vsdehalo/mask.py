@@ -13,7 +13,7 @@ from vstools import scale_8bit, get_y, vs
 def base_dehalo_mask(
     src: vs.VideoNode, expand: float = 0.5, iterations: int = 2,
     brz0: float = 0.31, brz1: float = 1.0, shift: int = 8,
-    pre_ss: bool = True
+    pre_ss: bool = True, multi: float = 1.0
 ) -> vs.VideoNode:
     """
     Based on `muvsfunc.YAHRmask`, stand-alone version with some tweaks. Adopted from jvsfunc.
@@ -48,7 +48,7 @@ def base_dehalo_mask(
         halo_mask = Morpho.inflate(halo_mask, iterations=2)
         halo_mask = Morpho.binarize(halo_mask, brz1)
 
-    mask = ExprOp.MIN(edgemask, BlurMatrix.WMEAN(halo_mask))
+    mask = norm_expr([edgemask, BlurMatrix.WMEAN(halo_mask)], 'x y min {multi} *', multi=multi)
 
     if pre_ss:
         return Point.scale(mask, src.width, src.height)
