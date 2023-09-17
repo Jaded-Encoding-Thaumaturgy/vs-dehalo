@@ -334,7 +334,8 @@ class _fine_dehalo:
             pre_ss = max(round(pre_ss), 2)
 
             work_clip = pre_supersampler.scale(
-                work_clip, work_clip.width * pre_ss, work_clip.height * pre_ss
+                work_clip, work_clip.width * pre_ss, work_clip.height * pre_ss,
+                (-(0.5 / pre_ss), -(0.5 / pre_ss))
             )
 
         dehalo_mask = self(
@@ -343,7 +344,7 @@ class _fine_dehalo:
         )
 
         if (dehalo_mask.width, dehalo_mask.height) != (clip.width, clip.height):
-            dehalo_mask = pre_downscaler.scale(work_clip, clip.width, clip.height, (0.5 / pre_ss, 0.5 / pre_ss))
+            dehalo_mask = pre_downscaler.scale(dehalo_mask, clip.width, clip.height)
 
         if dehaloed:
             return clip.std.MaskedMerge(dehaloed, dehalo_mask, planes, first_plane)
