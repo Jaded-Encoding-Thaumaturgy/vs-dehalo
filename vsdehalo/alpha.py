@@ -17,7 +17,6 @@ from vstools import (
     join, mod4, normalize_planes, normalize_seq, scale_value, split, to_arr, get_y, vs
 )
 
-
 __all__ = [
     'fine_dehalo',
     'fine_dehalo2',
@@ -297,10 +296,13 @@ class _fine_dehalo:
     def mask(
         self, clip: vs.VideoNode, dehaloed: vs.VideoNode | None = None,
         rx: int = 1, ry: int | None = None, thmi: int = 50, thma: int = 100, thlimi: int = 50, thlima: int = 100,
-        exclude: bool = True, edgeproc: float = 0.0, edgemask: EdgeDetect = Robinson3(),
+        exclude: bool = True, edgeproc: float = 0.0, edgemask: EdgeDetect = Robinson3(), pre_ss: float = 1.0,
+        pre_supersampler: ScalerT = Lanczos, pre_downscaler: ScalerT = Point,
         mask: int | FineDehaloMask = 1, planes: PlanesT = 0, first_plane: bool = False, func: FuncExceptT | None = None
     ) -> vs.VideoNode:
         """
+        The fine_dehalo mask.
+
         :param clip:                Source clip.
         :param dehaloed:            Optional dehaloed clip to mask. If this is specified, instead of returning
                                     the mask, the function will return the maskedmerged clip to this.
@@ -314,17 +316,34 @@ class _fine_dehalo:
         :param edgeproc:            If > 0, it will add the edgemask to the processing, defaults to 0.0
         :param edgemask:            Internal mask used for detecting the edges, defaults to Robinson3()
         :param get_mask:            Whether to show the computed halo mask. 1-7 values to select intermediate masks.
+        :param pre_ss:              Supersampling rate used before anything else. This value will be be rounded.
+        :param pre_supersampler:    Supersampler used for ``pre_ss``.
+        :param pre_downscaler:      Downscaler used for undoing the upscaling done by ``pre_supersampler``.
         :param planes:              Planes to process.
         :param first_plane:         Whether to mask chroma planes with luma mask.
         :param func:                Function from where this function was called.
 
         :return:                    Mask or masked clip.
         """
+        work_clip = get_y(clip)
+
+        pre_supersampler = Scaler.ensure_obj(pre_supersampler, func)
+        pre_downscaler = Scaler.ensure_obj(pre_downscaler, func)
+
+        if pre_ss > 1.0:
+            pre_ss = max(round(pre_ss), 2)
+
+            work_clip = pre_supersampler.scale(
+                work_clip, work_clip.width * pre_ss, work_clip.height * pre_ss
+            )
 
         dehalo_mask = self(
-            clip, rx, ry, thmi=thmi, thma=thma, thlimi=thlimi, thlima=thlima, exclude=exclude,
+            work_clip, rx, ry, thmi=thmi, thma=thma, thlimi=thlimi, thlima=thlima, exclude=exclude,
             edgeproc=edgeproc, edgemask=edgemask, planes=planes, show_mask=mask, func=func or self.mask
         )
+
+        if (dehalo_mask.width, dehalo_mask.height) != (clip.width, clip.height):
+            dehalo_mask = pre_downscaler.scale(work_clip, clip.width, clip.height, (0.5 / pre_ss, 0.5 / pre_ss))
 
         if dehaloed:
             return clip.std.MaskedMerge(dehaloed, dehalo_mask, planes, first_plane)
