@@ -4,7 +4,7 @@ from typing import Any, Sequence, final
 
 from vsaa import Nnedi3
 from vsexprtools import ExprOp, complexpr_available, combine, norm_expr
-from vskernels import BSpline, Lanczos, Mitchell, NoShift, Point, Scaler, ScalerT
+from vskernels import Bilinear, BSpline, Lanczos, Mitchell, NoShift, Point, Scaler, ScalerT
 from vsmasktools import EdgeDetect, Morpho, Robinson3, XxpandMode, grow_mask, retinex
 from vsrgtools import (
     box_blur, contrasharpening, contrasharpening_dehalo, repair, RemoveGrainMode, RepairMode, gauss_blur, limit_filter
@@ -297,7 +297,7 @@ class _fine_dehalo:
         self, clip: vs.VideoNode, dehaloed: vs.VideoNode | None = None,
         rx: int = 1, ry: int | None = None, thmi: int = 50, thma: int = 100, thlimi: int = 50, thlima: int = 100,
         exclude: bool = True, edgeproc: float = 0.0, edgemask: EdgeDetect = Robinson3(), pre_ss: float = 1.0,
-        pre_supersampler: ScalerT = Lanczos, pre_downscaler: ScalerT = Point,
+        pre_supersampler: ScalerT = Bilinear, pre_downscaler: ScalerT = Point,
         mask: int | FineDehaloMask = 1, planes: PlanesT = 0, first_plane: bool = False, func: FuncExceptT | None = None
     ) -> vs.VideoNode:
         """
