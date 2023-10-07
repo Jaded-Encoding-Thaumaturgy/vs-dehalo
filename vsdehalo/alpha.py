@@ -4,7 +4,7 @@ from typing import Any, Sequence, final
 
 from vsaa import Nnedi3
 from vsexprtools import ExprOp, complexpr_available, combine, norm_expr
-from vskernels import BSpline, Lanczos, Mitchell, NoShift, Point, Scaler, ScalerT
+from vskernels import Bilinear, BSpline, Lanczos, Mitchell, NoShift, Point, Scaler, ScalerT
 from vsmasktools import EdgeDetect, Morpho, Robinson3, XxpandMode, grow_mask, retinex
 from vsrgtools import (
     box_blur, contrasharpening, contrasharpening_dehalo, repair, RemoveGrainMode, RepairMode, gauss_blur, limit_filter
@@ -16,7 +16,6 @@ from vstools import (
     InvalidColorFamilyError, KwargsT, PlanesT, check_variable, clamp, cround, fallback, get_peak_value,
     join, mod4, normalize_planes, normalize_seq, scale_value, split, to_arr, get_y, vs
 )
-
 
 __all__ = [
     'fine_dehalo',
@@ -297,10 +296,13 @@ class _fine_dehalo:
     def mask(
         self, clip: vs.VideoNode, dehaloed: vs.VideoNode | None = None,
         rx: int = 1, ry: int | None = None, thmi: int = 50, thma: int = 100, thlimi: int = 50, thlima: int = 100,
-        exclude: bool = True, edgeproc: float = 0.0, edgemask: EdgeDetect = Robinson3(),
+        exclude: bool = True, edgeproc: float = 0.0, edgemask: EdgeDetect = Robinson3(), pre_ss: int = 1,
+        pre_supersampler: ScalerT = Bilinear,
         mask: int | FineDehaloMask = 1, planes: PlanesT = 0, first_plane: bool = False, func: FuncExceptT | None = None
     ) -> vs.VideoNode:
         """
+        The fine_dehalo mask.
+
         :param clip:                Source clip.
         :param dehaloed:            Optional dehaloed clip to mask. If this is specified, instead of returning
                                     the mask, the function will return the maskedmerged clip to this.
@@ -314,17 +316,31 @@ class _fine_dehalo:
         :param edgeproc:            If > 0, it will add the edgemask to the processing, defaults to 0.0
         :param edgemask:            Internal mask used for detecting the edges, defaults to Robinson3()
         :param get_mask:            Whether to show the computed halo mask. 1-7 values to select intermediate masks.
+        :param pre_ss:              Supersampling rate used before anything else. This value will be be rounded.
+        :param pre_supersampler:    Supersampler used for ``pre_ss``.
         :param planes:              Planes to process.
         :param first_plane:         Whether to mask chroma planes with luma mask.
         :param func:                Function from where this function was called.
 
         :return:                    Mask or masked clip.
         """
+        work_clip = get_y(clip)
+
+        if pre_ss > 1.0:
+            pre_ss = max(round(pre_ss), 2)
+
+            work_clip = Scaler.ensure_obj(pre_supersampler, func).scale(
+                work_clip, work_clip.width * pre_ss, work_clip.height * pre_ss,
+                (-(0.5 / pre_ss), -(0.5 / pre_ss))
+            )
 
         dehalo_mask = self(
-            clip, rx, ry, thmi=thmi, thma=thma, thlimi=thlimi, thlima=thlima, exclude=exclude,
+            work_clip, rx, ry, thmi=thmi, thma=thma, thlimi=thlimi, thlima=thlima, exclude=exclude,
             edgeproc=edgeproc, edgemask=edgemask, planes=planes, show_mask=mask, func=func or self.mask
         )
+
+        if (dehalo_mask.width, dehalo_mask.height) != (clip.width, clip.height):
+            dehalo_mask = Point.scale(dehalo_mask, clip.width, clip.height)
 
         if dehaloed:
             return clip.std.MaskedMerge(dehaloed, dehalo_mask, planes, first_plane)
