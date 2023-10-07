@@ -326,13 +326,10 @@ class _fine_dehalo:
         """
         work_clip = get_y(clip)
 
-        pre_supersampler = Scaler.ensure_obj(pre_supersampler, func)
-        pre_downscaler = Scaler.ensure_obj(pre_downscaler, func)
-
         if pre_ss > 1.0:
             pre_ss = max(round(pre_ss), 2)
 
-            work_clip = pre_supersampler.scale(
+            work_clip = Scaler.ensure_obj(pre_supersampler, func).scale(
                 work_clip, work_clip.width * pre_ss, work_clip.height * pre_ss,
                 (-(0.5 / pre_ss), -(0.5 / pre_ss))
             )
