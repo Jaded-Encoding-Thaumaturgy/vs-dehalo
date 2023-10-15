@@ -14,7 +14,7 @@ from vsdenoise import Prefilter
 from vstools import (
     ColorRange, ConvMode, CustomIndexError, CustomIntEnum, CustomValueError, FuncExceptT, FunctionUtil,
     InvalidColorFamilyError, KwargsT, PlanesT, check_variable, clamp, cround, fallback, get_peak_value,
-    join, mod4, normalize_planes, normalize_seq, scale_value, split, to_arr, get_y, vs
+    join, mod4, normalize_planes, normalize_seq, scale_value, split, to_arr, get_y, vs, FieldBased, UnsupportedFieldBasedError
 )
 
 __all__ = [
@@ -190,6 +190,9 @@ class _fine_dehalo:
         func = func or 'fine_dehalo'
 
         assert check_variable(clip, func)
+
+        if FieldBased.from_video(clip).is_inter:
+            raise UnsupportedFieldBasedError('Only progressive video is supported!', func)
 
         InvalidColorFamilyError.check(clip, (vs.GRAY, vs.YUV), func)
 
@@ -543,6 +546,9 @@ def dehalo_alpha(
 
     assert check_variable(clip, func)
 
+    if FieldBased.from_video(clip).is_inter:
+        raise UnsupportedFieldBasedError('Only progressive video is supported!', func)
+
     InvalidColorFamilyError.check(clip, (vs.GRAY, vs.YUV), func)
 
     planes = normalize_planes(clip, planes)
@@ -618,6 +624,9 @@ def dehalo_sigma(
 
     assert check_variable(clip, func)
 
+    if FieldBased.from_video(clip).is_inter:
+        raise UnsupportedFieldBasedError('Only progressive video is supported!', func)
+
     InvalidColorFamilyError.check(clip, (vs.GRAY, vs.YUV), func)
 
     planes = normalize_planes(clip, planes)
@@ -672,6 +681,9 @@ def dehalomicron(
     sigma_ref: float = 4.3333, planes: PlanesT = 0, fdehalo_kwargs: KwargsT | None = None, **kwargs: Any
 ) -> vs.VideoNode:
     func = FunctionUtil(clip, dehalomicron, planes, (vs.GRAY, vs.YUV))
+
+    if FieldBased.from_video(clip).is_inter:
+        raise UnsupportedFieldBasedError('Only progressive video is supported!', func.func)
 
     fdehalo_kwargs = KwargsT(edgeproc=0.5, ss=1.5 if pre_ss else 2.0) | (fdehalo_kwargs or {})
 

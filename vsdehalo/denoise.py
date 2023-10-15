@@ -8,7 +8,9 @@ from vsexprtools import ExprOp, ExprToken, norm_expr
 from vskernels import NoShift, Point, Scaler, ScalerT
 from vsmasktools import Morpho, Prewitt
 from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair
-from vstools import FunctionUtil, PlanesT, check_ref_clip, fallback, mod4, plane, vs
+from vstools import (
+    FieldBased, FunctionUtil, PlanesT, UnsupportedFieldBasedError, check_ref_clip, fallback, mod4, plane, vs
+)
 
 __all__ = [
     'smooth_dering'
@@ -74,6 +76,10 @@ def smooth_dering(
     :return:            Deringed clip.
     """
     func = FunctionUtil(clip, smooth_dering, planes, (vs.GRAY, vs.YUV))
+
+    if FieldBased.from_video(clip).is_inter:
+        raise UnsupportedFieldBasedError('Only progressive video is supported!', func.func)
+
     planes = func.norm_planes
     work_clip = func.work_clip
 
