@@ -1,4 +1,5 @@
 # vs-dehalo
+
 Collection of dehaloing VapourSynth functions
 
 ## How to use
@@ -16,12 +17,13 @@ dehaloed = fine_dehalo(src)
 Install `vsdehalo` with the following command:
 
 ```sh
-$ pip install vsdehalo
+pip install vsdehalo
 ```
 
 Or if you want the latest git version, install it with this command:
 
 ```sh
-$ pip install git+https://github.com/Irrational-Encoding-Wizardry/vs-dehalo.git
+pip install git+https://github.com/Jaded-Encoding-Thaumaturgy/vs-dehalo.git
 ```
+
 <br>
