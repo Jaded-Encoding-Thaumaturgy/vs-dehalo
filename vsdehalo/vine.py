@@ -11,9 +11,9 @@ from vsdenoise import (
     CCDMode, CCDPoints, MotionMode, MVTools, PelType, Prefilter, SearchMode, ccd, frequency_merge, nl_means
 )
 from vsexprtools import ExprOp, norm_expr_planes
-from vskernels import Bicubic
+from vskernels import Bicubic, Gaussian
 from vsmasktools import Morpho
-from vsrgtools import contrasharpening_dehalo, gauss_blur, gauss_fmtc_blur
+from vsrgtools import contrasharpening_dehalo, gauss_blur
 from vstools import (
     CustomIndexError, CustomRuntimeError, MatrixT, PlanesT, ResampleUtil, check_ref_clip, check_variable, core, get_y,
     join, normalize_planes, split, vs
@@ -43,7 +43,7 @@ def super_clip(src: vs.VideoNode, pel: int = 1, planes: PlanesT = 0) -> vs.Video
 
 def smooth_clip(
     src: vs.VideoNode, sr: int = 32, strength: float = 12.5,
-    sharp: float = 0.80, cutoff: int = 4,
+    sharp: float = 0.80, cutoff: float = 4,
     aggressive: bool = True, fast: bool = False,
     matrix: MatrixT | None = None,
     pel_type: PelType = PelType.BICUBIC,
@@ -63,7 +63,7 @@ def smooth_clip(
         raise CustomIndexError('"sharp" has to be greater than 0!', smooth_clip)
 
     if cutoff < 1 or cutoff > 100:
-        raise CustomIndexError('"cutoff" must fall in (0, 100]!', smooth_clip)
+        raise CustomIndexError('"cutoff" must fall in [1, 100]!', smooth_clip)
 
     csp = src.format.color_family
     planes = normalize_planes(src, planes)
@@ -114,9 +114,7 @@ def smooth_clip(
         clean, [weight if i in planes else 0 for i in range(work_clip.format.num_planes)]
     )
 
-    blur_func = partial(
-        gauss_fmtc_blur, sigma=cutoff, sharp=100, strict=False, planes=planes
-    )
+    blur_func = partial(gauss_blur, sigma=Gaussian.sigma.from_fmtc(cutoff), planes=planes)
 
     if aggressive:
         clean = core.std.Expr(
