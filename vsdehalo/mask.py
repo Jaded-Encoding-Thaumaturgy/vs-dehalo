@@ -10,6 +10,11 @@ from vsrgtools import BlurMatrix
 from vstools import FieldBased, UnsupportedFieldBasedError, get_y, scale_8bit, vs
 
 
+__all__ = [
+    'base_dehalo_mask'
+]
+
+
 def base_dehalo_mask(
     src: vs.VideoNode, expand: float = 0.5, iterations: int = 2,
     brz0: float = 0.31, brz1: float = 1.0, shift: int = 8,
