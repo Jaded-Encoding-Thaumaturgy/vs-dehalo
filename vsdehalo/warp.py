@@ -42,7 +42,7 @@ def edge_cleaner(
     if smode:
         strength += 4
 
-    padded = padder(work_clip, 6, 6, 6, 6)
+    padded = padder.MIRROR(work_clip, 6, 6, 6, 6)
 
     # warpsf is way too slow
     if is_float:
@@ -110,7 +110,7 @@ def YAHR(
 
     is_float = work_clip.format.sample_type == vs.FLOAT
 
-    padded = padder(work_clip, 6, 6, 6, 6)
+    padded = padder.MIRROR(work_clip, 6, 6, 6, 6)
 
     # warpsf is way too slow
     if is_float:
