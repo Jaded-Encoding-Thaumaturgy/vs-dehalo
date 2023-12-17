@@ -111,13 +111,28 @@ def _dehalo_supersample_minmax(
 
 @final
 class FineDehaloMask(CustomIntEnum):
+    """Enum representing a mask returned by `fine_dehalo`."""
+
     MAIN = 1
+    """Return the final mask used for dehaloing."""
+
     EDGES = 3
+    """Returns the mask including all edges."""
+
     SHARP_EDGES = 4
+    """Returns a mask with only sharp edges."""
+
     LARGE_EDGES = 6
+    """Returns a mask with only large edges."""
+
     IGNORE_DETAILS = 5
+    """Returns a mask including no fine detail."""
+
     SHRINK = 2
+    """Returns the shrinked mask."""
+
     SHRINK_EDGES_EXCL = 7
+    """Return the shrinked mask with edges excluded."""
 
 
 class _fine_dehalo:
@@ -140,24 +155,23 @@ class _fine_dehalo:
     ) -> vs.VideoNode:
         """
         Halo removal script that uses ``dehalo_alpha`` with a few masks and optional contra-sharpening
-        to try removing halos without nuking important details like line edges.
+        to try to remove halos without nuking important details like line edges.
 
         **For ``rx``, ``ry``, only the first value will be used for calculating the mask.**
 
-        ``rx``, ``ry``, ``darkstr``, ``brightstr``, ``lowsens``, ``highsens``, ``ss`` are all
-        configurable per plane and iteration. `tuple` means iteration, `list` plane.
+        ``rx``, ``ry``, ``darkstr``, ``brightstr``, ``lowsens``, ``highsens``, and ``ss``
+        are all configurable per plane and iteration. `tuple` means iteration, `list` plane.
 
-        `rx=(2.0, [2.0, 2.4], [2.2, 2.0, 2.1])` means three iterations.
+        Example: `rx=(2.0, [2.0, 2.4], [2.2, 2.0, 2.1])` means three iterations are performed:
         * 1st => 2.0 for all planes
         * 2nd => 2.0 for luma, 2.4 for chroma
         * 3rd => 2.2 for luma, 2.0 for u, 2.1 for v
 
-
-        :param clip:                Source clip.
+        :param clip:                Clip to process.
         :param rx:                  Horizontal radius for halo removal.
-        :param ry:                  Vertical radius for halo removal.
-        :param darkstr:             Strength factor for dark halos.
-        :param brightstr:           Strength factor for bright halos.
+        :param ry:                  Vertical radius for halo removal. If None, use the same value as `rx`.
+        :param darkstr:             Strength factor for dark halos. Higher values will dehalo stronger.
+        :param brightstr:           Strength factor for bright halos. Higher values will dehalo stronger.
         :param lowsens:             Sensitivity setting for how weak the dehalo has to be to get fully accepted.
         :param highsens:            Sensitivity setting for how strong the dehalo has to be to get fully discarded.
         :param thmi:                Minimum threshold for sharp edges; keep only the sharpest edges (line edges).
@@ -170,9 +184,10 @@ class _fine_dehalo:
                                     otherwise uses :py:func:`contrasharpening_fine_dehalo` with specified level.
         :param exclude:             If True, add an addionnal step to exclude edges close to each other
         :param edgeproc:            If > 0, it will add the edgemask to the processing, defaults to 0.0
-        :param edgemask:            Internal mask used for detecting the edges, defaults to Robinson3()
+        :param edgemask:            Internal mask used for detecting the edges, defaults to `Robinson3`.
         :param planes:              Planes to process.
         :param show_mask:           Whether to show the computed halo mask. 1-7 values to select intermediate masks.
+                                    See the `FineHaloMask` enum for additional information.
         :param mask_radius:         Mask expanding radius with ``gradient``.
         :param downscaler:          Scaler used to downscale the clip.
         :param upscaler:            Scaler used to upscale the downscaled clip.
@@ -184,8 +199,6 @@ class _fine_dehalo:
         :param func:                Function from where this function was called.
 
         :return:                    Dehaloed clip.
-
-
         """
         func = func or 'fine_dehalo'
 
@@ -271,7 +284,7 @@ class _fine_dehalo:
 
         mask = norm_expr(mask, f'x 2 * {ExprOp.clamp(0, peak)}', planes)
 
-        # Masking #
+        # Masking
         if show_mask:
             return [mask, shrink, edges, strong, light, large, shr_med][int(show_mask) - 1]
 
@@ -285,9 +298,7 @@ class _fine_dehalo:
             if isinstance(contra, float):
                 dehaloed = contrasharpening_dehalo(dehaloed, work_clip, contra, planes=planes)
             else:
-                dehaloed = contrasharpening(
-                    dehaloed, work_clip, None if contra is True else contra, planes=planes
-                )
+                dehaloed = contrasharpening(dehaloed, work_clip, int(contra), planes=planes)
 
         y_merge = work_clip.std.MaskedMerge(dehaloed, mask, planes)
 
