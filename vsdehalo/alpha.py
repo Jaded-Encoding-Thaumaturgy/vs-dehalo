@@ -60,7 +60,7 @@ def _dehalo_mask(
             sigma_mask = 0.0
 
         conv_values = [float((sig_mask := bool(sigma_mask)))] * 9
-        conv_values[5] = 1 / clamp(sigma_mask, 0, 1) if sig_mask else 1
+        conv_values[4] = 1 / clamp(sigma_mask, 0, 1) if sig_mask else 1
 
         mask = mask.std.Convolution(conv_values, planes=planes)
 
