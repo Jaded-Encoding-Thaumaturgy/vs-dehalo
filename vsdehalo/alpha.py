@@ -50,7 +50,7 @@ def _dehalo_mask(
             Morpho.gradient(clip, mask_radius, planes, coords=mask_coords),
             Morpho.gradient(ref, mask_radius, planes, coords=mask_coords)
         ],
-        'x 0 = 1.0 x y - x / ? {lowsens} - x {peak} / 256 255 / + 512 255 / / {highsens} + * '
+        'x 0 = 0.0 x y - x / ? {lowsens} - x {peak} / 256 255 / + 512 255 / / {highsens} + * '
         '0.0 max 1.0 min {peak} *', planes, peak=peak,
         lowsens=[lo / 255 for lo in lowsens], highsens=[hi / 100 for hi in highsens]
     )
