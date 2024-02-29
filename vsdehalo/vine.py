@@ -15,7 +15,7 @@ from vskernels import Bicubic, Gaussian
 from vsmasktools import Morpho
 from vsrgtools import contrasharpening_dehalo, gauss_blur
 from vstools import (
-    CustomIndexError, CustomRuntimeError, MatrixT, PlanesT, ResampleUtil, check_ref_clip, check_variable, core, get_y,
+    CustomIndexError, CustomRuntimeError, MatrixT, PlanesT, Colorspace, check_ref_clip, check_variable, core, get_y,
     join, normalize_planes, split, vs
 )
 
@@ -51,7 +51,7 @@ def smooth_clip(
 ) -> vs.VideoNode:
     assert check_variable(src, smooth_clip)
 
-    resampler = ResampleUtil(True)
+    resampler = Colorspace.OPP_BM3D.resampler
 
     if sr < 1:
         raise CustomIndexError('"sr" has to be greater than 0!', smooth_clip)
@@ -74,7 +74,7 @@ def smooth_clip(
     work_clip = src
 
     if csp == vs.RGB:
-        work_clip = resampler.rgb2opp(work_clip)  # type: ignore
+        work_clip = resampler.rgb2csp(work_clip, True)  # type: ignore
 
     work_clip, *chroma = split(work_clip) if planes == [0] and not fast else (work_clip, )  # type: ignore
 
@@ -136,7 +136,7 @@ def smooth_clip(
         smooth = join(smooth, *chroma)
 
     if csp == vs.RGB:
-        return resampler.opp2rgb(smooth)
+        return resampler.csp2rgb(smooth, True)
 
     return smooth
 
@@ -149,7 +149,7 @@ def dehalo(
 ) -> vs.VideoNode:
     assert check_variable(src, dehalo)
 
-    resampler = ResampleUtil(True)
+    resampler = Colorspace.OPP_BM3D.resampler
 
     if smooth:
         assert smooth.format
@@ -172,8 +172,8 @@ def dehalo(
     work_clip, smooth_wclip = src, smooth
 
     if csp == vs.RGB:
-        work_clip = resampler.rgb2opp(work_clip)  # type: ignore
-        smooth_wclip = resampler.rgb2opp(smooth_wclip)
+        work_clip = resampler.rgb2csp(work_clip, True)  # type: ignore
+        smooth_wclip = resampler.rgb2csp(smooth_wclip, True)
 
     work_clip, *chroma = split(work_clip) if planes == [0] else (work_clip, )  # type: ignore
     smooth_wclip = get_y(smooth_wclip) if planes == [0] else smooth_wclip
@@ -230,6 +230,6 @@ def dehalo(
         clean = join(clean, *chroma)
 
     if csp == vs.RGB:
-        return resampler.rgb2opp(clean)
+        return resampler.csp2rgb(clean, True)
 
     return clean
