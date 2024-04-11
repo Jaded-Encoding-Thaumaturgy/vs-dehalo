@@ -247,7 +247,7 @@ class _fine_dehalo:
 
         # This mask is almost binary, which will produce distinct
         # discontinuities once applied. Then we have to smooth it.
-        shrink = box_blur(shrink, 1, 2, planes)
+        shrink = box_blur(shrink, 1, 2, planes=planes)
 
         # Final mask building #
 
