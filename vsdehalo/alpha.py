@@ -13,8 +13,9 @@ from vsrgtools import (
 from vsrgtools.util import norm_rmode_planes
 from vstools import (
     ColorRange, ConvMode, CustomIndexError, CustomIntEnum, CustomValueError, FieldBased, FuncExceptT, FunctionUtil,
-    InvalidColorFamilyError, KwargsT, PlanesT, UnsupportedFieldBasedError, check_variable, clamp, cround, fallback,
-    get_peak_value, get_y, join, mod4, normalize_planes, normalize_seq, scale_value, split, to_arr, vs
+    InvalidColorFamilyError, KwargsT, PlanesT, UnsupportedFieldBasedError, check_ref_clip, check_variable, clamp,
+    cround, fallback, get_peak_value, get_y, join, mod4, normalize_planes, normalize_seq, scale_value, split, to_arr,
+    vs
 )
 
 __all__ = [
@@ -22,7 +23,8 @@ __all__ = [
     'fine_dehalo2',
     'dehalo_alpha',
     'dehalo_sigma',
-    'dehalomicron'
+    'dehalomicron',
+    'dehalo_merge'
 ]
 
 
@@ -50,7 +52,7 @@ def _dehalo_mask(
             Morpho.gradient(clip, mask_radius, planes, coords=mask_coords),
             Morpho.gradient(ref, mask_radius, planes, coords=mask_coords)
         ],
-        'x 0 = 1.0 x y - x / ? {lowsens} - x {peak} / 256 255 / + 512 255 / / {highsens} + * '
+        'x 0 = 0.0 x y - x / ? {lowsens} - x {peak} / 256 255 / + 512 255 / / {highsens} + * '
         '0.0 max 1.0 min {peak} *', planes, peak=peak,
         lowsens=[lo / 255 for lo in lowsens], highsens=[hi / 100 for hi in highsens]
     )
@@ -60,7 +62,7 @@ def _dehalo_mask(
             sigma_mask = 0.0
 
         conv_values = [float((sig_mask := bool(sigma_mask)))] * 9
-        conv_values[5] = 1 / clamp(sigma_mask, 0, 1) if sig_mask else 1
+        conv_values[4] = 1 / clamp(sigma_mask, 0, 1) if sig_mask else 1
 
         mask = mask.std.Convolution(conv_values, planes=planes)
 
@@ -741,3 +743,92 @@ def dehalomicron(
     dehalo = rep(*(reversed(clips) if dampen_rev else clips), func.norm_planes)  # type: ignore
 
     return func.return_clip(dehalo)
+
+
+def dehalo_merge(
+        clip: vs.VideoNode, dehalo: vs.VideoNode, darkstr: list[float] | float = 0.0, brightstr: list[float] | float = 1.0,
+        lowsens: list[float] | float = 50.0, highsens: list[float] | float = 50.0, sigma_mask: float | bool = False,
+        ss: list[float] | float = 1.5, planes: PlanesT = 0, show_mask: bool = False, mask_radius: int = 1,
+        supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell, pre_ss: float = 1.0,
+        pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift), pre_downscaler: ScalerT = Point,
+        mask_coords: int | tuple[int, ConvMode] | Sequence[int] = 3, func: FuncExceptT | None = None
+) -> vs.VideoNode:
+    """
+    Merge dehaloed clip onto the source clip.
+
+    ``darkstr``, ``brightstr``, ``lowsens``, ``highsens``, ``ss`` are all configurable per plane.
+
+    :param clip:                Source clip.
+    :param dehalo:              Dehaloed clip.
+    :param darkstr:             Strength factor for dark halos.
+    :param brightstr:           Strength factor for bright halos.
+    :param lowsens:             Sensitivity setting for defining how weak the dehalo has to be to get fully accepted.
+    :param highsens:            Sensitivity setting for define how strong the dehalo has to be to get fully discarded.
+    :param sigma_mask:          Blurring strength for the mask.
+    :param ss:                  Supersampling factor, to avoid creation of aliasing.
+    :param planes:              Planes to process.
+    :param show_mask:           Whether to show the computed halo mask.
+    :param mask_radius:         Mask expanding radius with ``gradient``.
+    :param supersampler:        Scaler used to supersampler the rescaled clip to `ss` factor.
+    :param supersampler_ref:    Reference scaler used to clamp the supersampled clip. Has to be blurrier.
+    :param pre_ss:              Supersampling rate used before anything else.
+    :param pre_supersampler:    Supersampler used for ``pre_ss``.
+    :param pre_downscaler:      Downscaler used for undoing the upscaling done by ``pre_supersampler``.
+    :param func:                Function from where this function was called.
+
+    :return:                    Merged clip.
+    """
+
+    func = func or dehalo_merge
+
+    assert check_ref_clip(clip, dehalo, func)
+
+    if FieldBased.from_video(clip).is_inter:
+        raise UnsupportedFieldBasedError('Only progressive video is supported!', func)
+
+    InvalidColorFamilyError.check(clip, (vs.GRAY, vs.YUV), func)
+
+    planes = normalize_planes(clip, planes)
+
+    pre_supersampler = Scaler.ensure_obj(pre_supersampler, func)
+    pre_downscaler = Scaler.ensure_obj(pre_downscaler, func)
+
+    work_clip, *chroma = split(clip) if planes == [0] else (clip, )
+    dehalo = split(dehalo)[0] if planes == [0] else dehalo
+
+    if pre_ss > 1.0:
+        work_clip = pre_supersampler.scale(
+            work_clip, mod4(work_clip.width * pre_ss), mod4(work_clip.height * pre_ss)
+        )
+
+    darkstr_i, brightstr_i, lowsens_i, highsens_i, ss_i = next(
+        _dehalo_schizo_norm(darkstr, brightstr, lowsens, highsens, ss)
+    )
+
+    if not all(x >= 1 for x in ss_i):
+        raise CustomIndexError('ss must be bigger than 1.0!', func)
+
+    if not all(0 <= x <= 1 for x in (*brightstr_i, *darkstr_i)):
+        raise CustomIndexError('brightstr, darkstr must be between 0.0 and 1.0!', func)
+
+    if not all(0 <= x <= 100 for x in (*lowsens_i, *highsens_i)):
+        raise CustomIndexError('lowsens and highsens must be between 0 and 100!', func)
+
+    mask = _dehalo_mask(work_clip, dehalo, lowsens_i, highsens_i, sigma_mask, mask_radius, mask_coords, planes)
+
+    if show_mask:
+        return mask
+
+    dehalo = dehalo.std.MaskedMerge(work_clip, mask, planes)
+
+    dehalo = _dehalo_supersample_minmax(work_clip, dehalo, ss_i, supersampler, supersampler_ref, planes, func)
+
+    work_clip = dehalo = _limit_dehalo(work_clip, dehalo, darkstr_i, brightstr_i, planes)
+
+    if (dehalo.width, dehalo.height) != (clip.width, clip.height):
+        dehalo = pre_downscaler.scale(work_clip, clip.width, clip.height)
+
+    if not chroma:
+        return dehalo
+
+    return join([dehalo, *chroma], clip.format.color_family)
