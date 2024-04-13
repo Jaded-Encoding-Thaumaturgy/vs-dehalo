@@ -746,12 +746,12 @@ def dehalomicron(
 
 
 def dehalo_merge(
-        clip: vs.VideoNode, dehalo: vs.VideoNode, darkstr: list[float] | float = 0.0, brightstr: list[float] | float = 1.0,
-        lowsens: list[float] | float = 50.0, highsens: list[float] | float = 50.0, sigma_mask: float | bool = False,
-        ss: list[float] | float = 1.5, planes: PlanesT = 0, show_mask: bool = False, mask_radius: int = 1,
-        supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell, pre_ss: float = 1.0,
-        pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift), pre_downscaler: ScalerT = Point,
-        mask_coords: int | tuple[int, ConvMode] | Sequence[int] = 3, func: FuncExceptT | None = None
+    clip: vs.VideoNode, dehalo: vs.VideoNode, darkstr: list[float] | float = 0.0, brightstr: list[float] | float = 1.0,
+    lowsens: list[float] | float = 50.0, highsens: list[float] | float = 50.0, sigma_mask: float | bool = False,
+    ss: list[float] | float = 1.5, planes: PlanesT = 0, show_mask: bool = False, mask_radius: int = 1,
+    supersampler: ScalerT = Lanczos(3), supersampler_ref: ScalerT = Mitchell, pre_ss: float = 1.0,
+    pre_supersampler: ScalerT = Nnedi3(0, field=0, shifter=NoShift), pre_downscaler: ScalerT = Point,
+    mask_coords: int | tuple[int, ConvMode] | Sequence[int] = 3, func: FuncExceptT | None = None
 ) -> vs.VideoNode:
     """
     Merge dehaloed clip onto the source clip.
