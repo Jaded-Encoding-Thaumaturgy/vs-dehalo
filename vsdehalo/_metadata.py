@@ -1,6 +1,6 @@
 """Collection of dehaloing VapourSynth functions"""
 
-__version__ = '1.8.1'
+__version__ = '1.9.0'
 
 __author_name__, __author_email__ = 'Setsugen no ao', 'setsugen@setsugen.dev'
 __maintainer_name__, __maintainer_email__ = __author_name__, __author_email__
