@@ -358,7 +358,7 @@ fine_dehalo = _fine_dehalo()
 
 def fine_dehalo2(
     clip: vs.VideoNode,
-    mode: ConvMode = ConvMode.SQUARE,
+    mode: ConvMode = ConvMode.HV,
     radius: int = 2, mask_radius: int = 2,
     brightstr: float = 1.0, darkstr: float = 1.0,
     dark: bool | None = True, planes: PlanesT = 0,
@@ -403,7 +403,7 @@ def fine_dehalo2(
             for coord in (mask_h_conv, mask_v_conv)
         ]
 
-        if mode == ConvMode.SQUARE:
+        if mode == ConvMode.HV:
             do_mv = do_mh = True
         else:
             do_mv, do_mh = [
@@ -419,10 +419,10 @@ def fine_dehalo2(
             for mexpr, do_m, do_om, omexpr in [mask_args, mask_args[::-1]]
         ]
     else:
-        if mode in {ConvMode.SQUARE, ConvMode.VERTICAL}:
+        if mode in {ConvMode.HV, ConvMode.VERTICAL}:
             mask_h = work_clip.std.Convolution(mask_h_conv, None, 4, planes, False)
 
-        if mode in {ConvMode.SQUARE, ConvMode.HORIZONTAL}:
+        if mode in {ConvMode.HV, ConvMode.HORIZONTAL}:
             mask_v = work_clip.std.Convolution(mask_v_conv, None, 4, planes, False)
 
         if mask_h and mask_v:
