@@ -8,7 +8,7 @@ from vsrgtools import min_blur, removegrain, repair
 from vsrgtools.util import mean_matrix, wmean_matrix
 from vstools import (
     ColorRange, DitherType, PlanesT, core, cround, disallow_variable_format, disallow_variable_resolution, depth_func,
-    get_peak_value, get_y, join, normalize_planes, padder, scale_value, split, vs
+    get_peak_value, get_y, join, normalize_planes, padder, scale_8bit, split, vs
 )
 
 __all__ = [
@@ -36,7 +36,6 @@ def edge_cleaner(
     assert work_clip.format
 
     peak = get_peak_value(work_clip)
-    bits = work_clip.format.bits_per_sample
     is_float = work_clip.format.sample_type == vs.FLOAT
 
     if smode:
@@ -64,7 +63,7 @@ def edge_cleaner(
     y_mask = get_y(work_clip)
 
     mask = edgemask.edgemask(y_mask).std.Expr(
-        f'x {scale_value(4, 8, bits, ColorRange.FULL)} < 0 x {scale_value(32, 8, bits, ColorRange.FULL)} > {peak} x ? ?'
+        f'x {scale_8bit(work_clip, 4)} < 0 x {scale_8bit(work_clip, 32)} > {peak} x ? ?'
     ).std.InvertMask()
     mask = mask.std.Convolution(mean_matrix)
 
@@ -79,10 +78,10 @@ def edge_cleaner(
         diff = y_mask.std.MakeDiff(clean)
 
         mask = edgemask.edgemask(
-            diff.std.Levels(scale_value(40, 8, bits, ColorRange.FULL), scale_value(168, 8, bits, ColorRange.FULL), 0.35)
+            diff.std.Levels(scale_8bit(work_clip, 40), scale_8bit(work_clip, 168), 0.35)
         )
-        sc4 = scale_value(4, 8, bits, ColorRange.FULL)
-        sc16 = scale_value(16, 8, bits, ColorRange.FULL)
+        sc4 = scale_8bit(work_clip, 4)
+        sc16 = scale_8bit(work_clip, 16)
         mask = removegrain(mask, 7).std.Expr(f'x {sc4} < 0 x {sc16} > {peak} x ? ?')
 
         final = final.std.MaskedMerge(work_clip, mask)
