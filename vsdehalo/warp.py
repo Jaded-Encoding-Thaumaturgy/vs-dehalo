@@ -7,7 +7,7 @@ from vsmasktools import EdgeDetect, EdgeDetectT, PrewittStd
 from vsrgtools import min_blur, removegrain, repair
 from vsrgtools.util import mean_matrix, wmean_matrix
 from vstools import (
-    ColorRange, DitherType, PlanesT, core, cround, disallow_variable_format, disallow_variable_resolution, depth_func,
+    DitherType, PlanesT, core, cround, disallow_variable_format, disallow_variable_resolution, depth_func,
     get_peak_value, get_y, join, normalize_planes, padder, scale_8bit, split, vs
 )
 
