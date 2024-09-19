@@ -15,7 +15,7 @@ from vstools import (
     ColorRange, ConvMode, CustomIndexError, CustomIntEnum, CustomValueError, FieldBased, FuncExceptT, FunctionUtil,
     InvalidColorFamilyError, KwargsT, PlanesT, UnsupportedFieldBasedError, check_ref_clip, check_variable, clamp,
     cround, fallback, get_peak_value, get_y, join, mod4, normalize_planes, normalize_seq, scale_value, split, to_arr,
-    vs
+    scale_8bit, vs
 )
 
 __all__ = [
@@ -202,7 +202,7 @@ class _fine_dehalo:
             raise CustomValueError('valid values for show_mask are 1–7!', func)
 
         thmif, thmaf, thlimif, thlimaf = [
-            scale_value(x, 8, clip, ColorRange.FULL)
+            scale_8bit(clip, x)
             for x in [thmi, thma, thlimi, thlima]
         ]
 
@@ -703,7 +703,7 @@ def dehalomicron(
     dehalo_mask = RemoveGrainMode.MINMAX_MEDIAN_OPP(dehalo_mask)
 
     if brz:
-        dmask_expr = f"x {scale_value(abs(brz), 32, y)} {'>' if brz < 0.0 else '>'} 0 x 2 * ?"
+        dmask_expr = f"x {scale_value(abs(brz), 32, y, ColorRange.FULL)} {'>' if brz < 0.0 else '>'} 0 x 2 * ?"
     else:
         dmask_expr = 'x 2 *'
 
