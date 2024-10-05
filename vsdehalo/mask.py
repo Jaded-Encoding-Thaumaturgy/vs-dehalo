@@ -7,7 +7,7 @@ from vsexprtools import norm_expr
 from vskernels import Point
 from vsmasktools import Morpho, PrewittTCanny
 from vsrgtools import BlurMatrix
-from vstools import FieldBased, UnsupportedFieldBasedError, get_y, scale_8bit, vs
+from vstools import ColorRange, FieldBased, UnsupportedFieldBasedError, get_y, scale_value, vs
 
 
 __all__ = [
@@ -43,7 +43,7 @@ def base_dehalo_mask(
 
     exp_edges = norm_expr(
         [luma, Morpho.maximum(luma, iterations=2)], 'y x - {shift} - range_half *',
-        shift=scale_8bit(luma, shift)
+        shift=scale_value(shift, 8, luma, ColorRange.FULL)
     )
 
     edgemask = PrewittTCanny.edgemask(exp_edges, sigma=sqrt(expand * 2), mode=-1, multi=16)

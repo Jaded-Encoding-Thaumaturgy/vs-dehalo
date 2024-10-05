@@ -15,7 +15,7 @@ from vstools import (
     ColorRange, ConvMode, CustomIndexError, CustomIntEnum, CustomValueError, FieldBased, FuncExceptT, FunctionUtil,
     InvalidColorFamilyError, KwargsT, PlanesT, UnsupportedFieldBasedError, check_ref_clip, check_variable, clamp,
     cround, fallback, get_peak_value, get_y, join, mod4, normalize_planes, normalize_seq, scale_value, split, to_arr,
-    scale_8bit, vs
+    vs
 )
 
 __all__ = [
@@ -202,7 +202,7 @@ class _fine_dehalo:
             raise CustomValueError('valid values for show_mask are 1–7!', func)
 
         thmif, thmaf, thlimif, thlimaf = [
-            scale_8bit(clip, x)
+            scale_value(x, 8, clip, ColorRange.FULL)
             for x in [thmi, thma, thlimi, thlima]
         ]
 
