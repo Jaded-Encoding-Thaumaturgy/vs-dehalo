@@ -202,7 +202,7 @@ class _fine_dehalo:
             raise CustomValueError('valid values for show_mask are 1–7!', func)
 
         thmif, thmaf, thlimif, thlimaf = [
-            scale_value(x, 8, clip, ColorRange.FULL)
+            scale_value(x, 8, clip, ColorRange.FULL, ColorRange.FULL)
             for x in [thmi, thma, thlimi, thlima]
         ]
 
@@ -703,7 +703,10 @@ def dehalomicron(
     dehalo_mask = RemoveGrainMode.MINMAX_MEDIAN_OPP(dehalo_mask)
 
     if brz:
-        dmask_expr = f"x {scale_value(abs(brz), 32, y, ColorRange.FULL)} {'>' if brz < 0.0 else '>'} 0 x 2 * ?"
+        dmask_expr = (
+            f"x {scale_value(abs(brz), 32, y, ColorRange.FULL, ColorRange.FULL)} "
+            f"{'>' if brz < 0.0 else '>'} 0 x 2 * ?"
+        )
     else:
         dmask_expr = 'x 2 *'
 

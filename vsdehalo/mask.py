@@ -43,7 +43,7 @@ def base_dehalo_mask(
 
     exp_edges = norm_expr(
         [luma, Morpho.maximum(luma, iterations=2)], 'y x - {shift} - range_half *',
-        shift=scale_value(shift, 8, luma, ColorRange.FULL)
+        shift=scale_value(shift, 8, luma, ColorRange.FULL, ColorRange.FULL)
     )
 
     edgemask = PrewittTCanny.edgemask(exp_edges, sigma=sqrt(expand * 2), mode=-1, multi=16)

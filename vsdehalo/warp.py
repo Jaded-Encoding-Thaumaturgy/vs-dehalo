@@ -63,8 +63,8 @@ def edge_cleaner(
     y_mask = get_y(work_clip)
 
     mask = edgemask.edgemask(y_mask).std.Expr(
-        f'x {scale_value(4, 8, work_clip, ColorRange.FULL)} < 0 x '
-        f'{scale_value(32, 8, work_clip, ColorRange.FULL)} > {peak} x ? ?'
+        f'x {scale_value(4, 8, work_clip, ColorRange.FULL, ColorRange.FULL)} < 0 x '
+        f'{scale_value(32, 8, work_clip, ColorRange.FULL, ColorRange.FULL)} > {peak} x ? ?'
     ).std.InvertMask()
     mask = mask.std.Convolution(mean_matrix)
 
@@ -80,13 +80,13 @@ def edge_cleaner(
 
         mask = edgemask.edgemask(
             diff.std.Levels(
-                scale_value(40, 8, work_clip, ColorRange.FULL),
-                scale_value(168, 8, work_clip, ColorRange.FULL),
+                scale_value(40, 8, work_clip, ColorRange.FULL, ColorRange.FULL),
+                scale_value(168, 8, work_clip, ColorRange.FULL, ColorRange.FULL),
                 0.35
             )
         )
-        sc4 = scale_value(4, 8, work_clip, ColorRange.FULL)
-        sc16 = scale_value(16, 8, work_clip, ColorRange.FULL)
+        sc4 = scale_value(4, 8, work_clip, ColorRange.FULL, ColorRange.FULL)
+        sc16 = scale_value(16, 8, work_clip, ColorRange.FULL, ColorRange.FULL)
         mask = removegrain(mask, 7).std.Expr(f'x {sc4} < 0 x {sc16} > {peak} x ? ?')
 
         final = final.std.MaskedMerge(work_clip, mask)
