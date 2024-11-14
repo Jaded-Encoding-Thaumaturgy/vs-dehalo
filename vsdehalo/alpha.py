@@ -12,9 +12,9 @@ from vsrgtools import (
 )
 from vsrgtools.util import norm_rmode_planes
 from vstools import (
-    ColorRange, ConvMode, CustomIndexError, CustomIntEnum, CustomValueError, FieldBased, FuncExceptT, FunctionUtil,
+    ConvMode, CustomIndexError, CustomIntEnum, CustomValueError, FieldBased, FuncExceptT, FunctionUtil,
     InvalidColorFamilyError, KwargsT, PlanesT, UnsupportedFieldBasedError, check_ref_clip, check_variable, clamp,
-    cround, fallback, get_peak_value, get_y, join, mod4, normalize_planes, normalize_seq, scale_value, split, to_arr,
+    cround, fallback, get_peak_value, get_y, join, mod4, normalize_planes, normalize_seq, scale_mask, split, to_arr,
     vs
 )
 
@@ -202,7 +202,7 @@ class _fine_dehalo:
             raise CustomValueError('valid values for show_mask are 1–7!', func)
 
         thmif, thmaf, thlimif, thlimaf = [
-            scale_value(x, 8, clip, ColorRange.FULL, ColorRange.FULL)
+            scale_mask(x, 8, clip)
             for x in [thmi, thma, thlimi, thlima]
         ]
 
@@ -704,7 +704,7 @@ def dehalomicron(
 
     if brz:
         dmask_expr = (
-            f"x {scale_value(abs(brz), 32, y, ColorRange.FULL, ColorRange.FULL)} "
+            f"x {scale_mask(abs(brz), 32, y)} "
             f"{'>' if brz < 0.0 else '>'} 0 x 2 * ?"
         )
     else:
