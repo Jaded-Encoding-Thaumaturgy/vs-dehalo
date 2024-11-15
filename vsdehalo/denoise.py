@@ -179,15 +179,15 @@ def vine_dehalo(
     if FieldBased.from_video(clip).is_inter:
         raise UnsupportedFieldBasedError('Only progressive video is supported!', func.func)
 
+    sharp = min(max(sharp, 0.0), 1.0)
+    simr = kwargs.pop('simr', None)
+
     # Only God knows how these were derived.
     constants = (
         0.3926327792690057290863679493724 * sharp,
         18.880334973195822973214959957208,
         0.5862453661304626725671053478676
     )
-
-    sharp = min(max(sharp, 0.0), 1.0)
-    simr = kwargs.pop('simr', None)
 
     weight = constants[0] * log(1 + 1 / constants[0])
     h_refine = constants[1] * (strength / constants[1]) ** constants[2]
