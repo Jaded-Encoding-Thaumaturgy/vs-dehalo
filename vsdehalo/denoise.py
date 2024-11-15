@@ -1,19 +1,22 @@
 from __future__ import annotations
 
-from math import ceil
+from functools import partial
+from math import ceil, log
+from typing import Sequence
 
 from vsaa import Nnedi3
-from vsdenoise import Prefilter
+from vsdenoise import Prefilter, nl_means, frequency_merge
 from vsexprtools import ExprOp, ExprToken, norm_expr
-from vskernels import NoShift, Point, Scaler, ScalerT
+from vskernels import NoShift, Point, Catrom, Scaler, ScalerT
 from vsmasktools import Morpho, Prewitt
-from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair
+from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair, gauss_blur
 from vstools import (
-    FieldBased, FunctionUtil, PlanesT, UnsupportedFieldBasedError, check_ref_clip, fallback, mod4, plane, vs
+    FieldBased, FunctionUtil, PlanesT, UnsupportedFieldBasedError, check_ref_clip, fallback, mod4, plane, vs, core
 )
 
 __all__ = [
-    'smooth_dering'
+    'smooth_dering',
+    'vine_dehalo'
 ]
 
 
@@ -153,3 +156,58 @@ def smooth_dering(
         dering = pre_downscaler.scale(work_clip, clip.width, clip.height)
 
     return func.return_clip(dering)
+
+
+def vine_dehalo(
+    clip: vs.VideoNode, strength: float | Sequence[float] = 16.0, sharp: float = 0.5, sigma: float | list[float] = 1.0,
+    supersampler: ScalerT = Nnedi3, downscaler: ScalerT = Catrom, planes: PlanesT = 0, **kwargs
+) -> vs.VideoNode:
+    """
+    :param clip:            Clip to process.
+    :param strength:        Strength of nl_means filtering.
+    :param sharp:           Weight to blend supersampled clip.
+    :param sigma:           Gaussian sigma for filtering cutoff.
+    :param supersampler:    Scaler used for supersampling before dehaloing.
+    :param downscaler:      Scaler used for downscaling after supersampling.
+    :param planes:          Planes to be processed.
+    :param kwargs:          Additional kwargs to be passed to nl_means.
+
+    :return:                Dehaloed clip.
+    """
+    func = FunctionUtil(clip, vine_dehalo, planes)
+
+    if FieldBased.from_video(clip).is_inter:
+        raise UnsupportedFieldBasedError('Only progressive video is supported!', func.func)
+
+    # Only God knows how these were derived.
+    constants = (
+        0.3926327792690057290863679493724 * sharp,
+        18.880334973195822973214959957208,
+        0.5862453661304626725671053478676
+    )
+
+    sharp = min(max(sharp, 0.0), 1.0)
+    simr = kwargs.pop('simr', None)
+
+    weight = constants[0] * log(1 + 1 / constants[0])
+    h_refine = constants[1] * (strength / constants[1]) ** constants[2]
+
+    supersampled = supersampler.multi(func.work_clip)
+    supersampled = nl_means(supersampled, strength, tr=0, simr=0, **kwargs)
+    supersampled = downscaler.scale(supersampled, func.work_clip.width, func.work_clip.height)
+
+    smoothed = nl_means(func.work_clip, strength, tr=0, simr=0, **kwargs)
+    smoothed = core.std.Merge(supersampled, smoothed, weight)
+
+    highpassed = frequency_merge(
+        [func.work_clip, smoothed],
+        mode_low=func.work_clip,
+        mode_high=smoothed,
+        lowpass=partial(gauss_blur, sigma=sigma)
+    )
+
+    refined = func.work_clip.std.MakeDiff(highpassed)
+    refined = nl_means(refined, h_refine, tr=0, simr=simr, **kwargs)
+    refined = highpassed.std.MergeDiff(refined)
+
+    return func.return_clip(refined)
