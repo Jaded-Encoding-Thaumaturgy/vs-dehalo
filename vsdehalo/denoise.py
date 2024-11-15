@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import partial
 from math import ceil, log
+from typing import Sequence
 
 from vsaa import Nnedi3
 from vsdenoise import Prefilter, nl_means, frequency_merge
@@ -158,7 +159,7 @@ def smooth_dering(
 
 
 def vine_dehalo(
-    clip: vs.VideoNode, strength: int = 16, sharp: float = 0.5, sigma: float = 1.0,
+    clip: vs.VideoNode, strength: float | Sequence[float] = 16.0, sharp: float = 0.5, sigma: float | list[float] = 1.0,
     supersampler: ScalerT = Nnedi3, downscaler: ScalerT = Catrom, planes: PlanesT = 0, **kwargs
 ) -> vs.VideoNode:
     """
@@ -180,7 +181,7 @@ def vine_dehalo(
 
     # Only God knows how these were derived.
     constants = (
-        0.3926327792690057290863679493724,
+        0.3926327792690057290863679493724 * sharp,
         18.880334973195822973214959957208,
         0.5862453661304626725671053478676
     )
@@ -188,7 +189,7 @@ def vine_dehalo(
     sharp = min(max(sharp, 0.0), 1.0)
     simr = kwargs.pop('simr', None)
 
-    weight = constants[0] * sharp * log(1 + 1 / (constants[0] * sharp))
+    weight = constants[0] * log(1 + 1 / constants[0])
     h_refine = constants[1] * (strength / constants[1]) ** constants[2]
 
     supersampled = supersampler.multi(func.work_clip)
@@ -205,8 +206,8 @@ def vine_dehalo(
         lowpass=partial(gauss_blur, sigma=sigma)
     )
 
-    refine = func.work_clip.std.MakeDiff(highpassed)
-    refine = nl_means(refine, h_refine, tr=0, simr=simr, **kwargs)
-    refine = highpassed.std.MergeDiff(refine)
+    refined = func.work_clip.std.MakeDiff(highpassed)
+    refined = nl_means(refined, h_refine, tr=0, simr=simr, **kwargs)
+    refined = highpassed.std.MergeDiff(refined)
 
-    return func.return_clip(refine)
+    return func.return_clip(refined)
