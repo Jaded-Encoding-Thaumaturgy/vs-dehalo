@@ -56,7 +56,7 @@ def base_dehalo_mask(
         halo_mask = Morpho.inflate(halo_mask, iterations=2)
         halo_mask = Morpho.binarize(halo_mask, brz1)
 
-    mask = norm_expr([edgemask, BlurMatrix.WMEAN(halo_mask)], 'x y min {multi} *', multi=multi)
+    mask = norm_expr([edgemask, BlurMatrix.BINOMIAL()(halo_mask)], 'x y min {multi} *', multi=multi)
 
     if pre_ss:
         return Point.scale(mask, src.width, src.height)
