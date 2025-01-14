@@ -110,7 +110,7 @@ def smooth_dering(
 
     if contra:
         if isinstance(contra, int):
-            smoothed = contrasharpening(smoothed, work_clip, contra, 13, planes)
+            smoothed = contrasharpening(smoothed, work_clip, contra, 13, planes=planes)
         else:
             smoothed = contrasharpening_dehalo(smoothed, work_clip, contra, planes=planes)
 
