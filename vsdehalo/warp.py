@@ -130,7 +130,7 @@ def YAHR(
 
     blur_diff, blur_warped_diff = [
         c.std.MakeDiff(
-            BlurMatrix.BINOMIAL()(min_blur(c, 2, planes), planes=planes), planes
+            BlurMatrix.BINOMIAL()(min_blur(c, 2, planes=planes), planes=planes), planes
         ) for c in (work_clip, warped)
     ]
 
