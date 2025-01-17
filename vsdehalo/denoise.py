@@ -2,16 +2,17 @@ from __future__ import annotations
 
 from functools import partial
 from math import ceil, log
-from typing import Sequence
+from typing import Any, Sequence, cast
 
 from vsaa import Nnedi3
-from vsdenoise import Prefilter, nl_means, frequency_merge
+from vsdenoise import Prefilter, frequency_merge, nl_means
 from vsexprtools import ExprOp, ExprToken, norm_expr
-from vskernels import NoShift, Point, Catrom, Scaler, ScalerT
+from vskernels import Catrom, NoShift, Point, Scaler, ScalerT
 from vsmasktools import Morpho, Prewitt
-from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, limit_filter, repair, gauss_blur
+from vsrgtools import LimitFilterMode, contrasharpening, contrasharpening_dehalo, gauss_blur, limit_filter, repair
 from vstools import (
-    FieldBased, FunctionUtil, PlanesT, UnsupportedFieldBasedError, check_ref_clip, fallback, mod4, plane, vs, core
+    ConstantFormatVideoNode, FieldBased, FunctionUtil, PlanesT, UnsupportedFieldBasedError,
+    check_ref_clip, core, fallback, mod4, plane, to_arr, vs
 )
 
 __all__ = [
@@ -131,7 +132,7 @@ def smooth_dering(
         omask = Morpho.expand(fmask, mrad, mrad, planes=planes) if mrad > 0 else fmask
 
         if msmooth > 0:
-            omask = Morpho.inflate(omask, msmooth, planes)
+            omask = Morpho.inflate(omask, iterations=msmooth, planes=planes)
 
         if incedge:
             ringmask = omask
@@ -141,7 +142,7 @@ def smooth_dering(
             elif minp % 2 == 0:
                 imask = Morpho.inpand(fmask, minp // 2, planes=planes)
             else:
-                imask = Morpho.inpand(Morpho.inflate(fmask, 1, planes), ceil(minp / 2), planes=planes)
+                imask = Morpho.inpand(Morpho.inflate(fmask, planes=planes), ceil(minp / 2), planes=planes)
 
             ringmask = norm_expr(
                 [omask, imask], [f'{ExprToken.RangeMax} {ExprToken.RangeMax} y - / x *', ExprOp.clamp()]
