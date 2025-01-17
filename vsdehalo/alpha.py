@@ -96,12 +96,12 @@ def _dehalo_supersample_minmax(
 
         w, h = mod4(work_clip.width * ss), mod4(work_clip.height * ss)
         ss_clip = norm_expr([
-            supersampler.scale(work_clip, w, h),  # type: ignore
-            supersampler_ref.scale(dehalo.std.Maximum(), w, h),  # type: ignore
-            supersampler_ref.scale(dehalo.std.Minimum(), w, h)  # type: ignore
+            supersampler.scale(work_clip, w, h),
+            supersampler_ref.scale(dehalo.std.Maximum(), w, h),
+            supersampler_ref.scale(dehalo.std.Minimum(), w, h)
         ], 'x y min z max', planes)
 
-        return supersampler.scale(ss_clip, work_clip.width, work_clip.height)  # type: ignore
+        return supersampler.scale(ss_clip, work_clip.width, work_clip.height)
 
     if len(set(ss)) == 1 or planes == [0] or clip.format.num_planes == 1:  # type: ignore
         dehalo = _supersample(clip, ref, ss[0])
@@ -290,7 +290,7 @@ class _fine_dehalo:
                 dehaloed = contrasharpening_dehalo(dehaloed, work_clip, contra, planes=planes)
             else:
                 dehaloed = contrasharpening(
-                    dehaloed, work_clip, None if contra is True else contra, planes=planes
+                    dehaloed, work_clip, int(contra), planes=planes
                 )
 
         y_merge = work_clip.std.MaskedMerge(dehaloed, mask, planes)
@@ -464,8 +464,8 @@ def fine_dehalo2(
             if mask:
                 dehaloed = dehaloed.std.MaskedMerge(fix, mask)
 
-        if op:
-            dehaloed = combine([work_clip, dehaloed], op)  # type: ignore
+        if op != '':
+            dehaloed = combine([work_clip, dehaloed], op)  # type: ignore[arg-type]
 
     if darkstr != brightstr != 1.0:
         dehaloed = _limit_dehalo(work_clip, dehaloed, darkstr, brightstr, planes)
@@ -548,7 +548,7 @@ def dehalo_alpha(
         )
 
     def _rescale(clip: vs.VideoNode, rx: float, ry: float) -> vs.VideoNode:
-        return upscaler.scale(downscaler.scale(  # type: ignore
+        return upscaler.scale(downscaler.scale(
             clip, mod4(clip.width / rx), mod4(clip.height / ry)
         ), clip.width, clip.height)
 
@@ -696,7 +696,7 @@ def dehalomicron(
     actual_dehalo = dehalo_sigma(
         func.work_clip, pre_ss=1 + pre_ss, sigma=sigma, ss=ss - 0.5 * pre_ss, planes=func.norm_planes, **kwargs
     )
-    dehalo_ref = fine_dehalo(func.work_clip, planes=func.norm_planes, **fdehalo_kwargs)
+    dehalo_ref = fine_dehalo(func.work_clip, planes=func.norm_planes, **fdehalo_kwargs)  # type: ignore[arg-type]
 
     dehalo_min = ExprOp.MIN(actual_dehalo, dehalo_ref, planes=func.norm_planes)
 
@@ -762,6 +762,7 @@ def dehalo_merge(
     func = func or dehalo_merge
 
     assert check_ref_clip(clip, dehalo, func)
+    assert check_variable_format(clip, func)
 
     if FieldBased.from_video(clip).is_inter:
         raise UnsupportedFieldBasedError('Only progressive video is supported!', func)
@@ -782,7 +783,7 @@ def dehalo_merge(
         )
 
     darkstr_i, brightstr_i, lowsens_i, highsens_i, ss_i = next(
-        _dehalo_schizo_norm(darkstr, brightstr, lowsens, highsens, ss)
+        _dehalo_schizo_norm(darkstr, brightstr, lowsens, highsens, ss)  # type: ignore[call-overload]
     )
 
     if not all(x >= 1 for x in ss_i):

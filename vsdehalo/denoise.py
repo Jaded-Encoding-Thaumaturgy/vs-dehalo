@@ -91,27 +91,27 @@ def smooth_dering(
     pre_downscaler = Scaler.ensure_obj(pre_downscaler, smooth_dering)
 
     if pre_ss > 1.0:
-        work_clip = pre_supersampler.scale(  # type: ignore
+        work_clip = cast(ConstantFormatVideoNode, pre_supersampler.scale(
             work_clip, mod4(work_clip.width * pre_ss), mod4(work_clip.height * pre_ss)
-        )
+        ))
 
     darkthr = fallback(darkthr, thr // 4)
 
     rep_dr = [drrep if i in planes else 0 for i in range(work_clip.format.num_planes)]
 
     if not isinstance(smooth, vs.VideoNode):
-        smoothed = smooth(work_clip, planes)  # type: ignore
+        smoothed = smooth(work_clip, planes)
     else:
-        check_ref_clip(clip, smooth)  # type: ignore
+        check_ref_clip(clip, smooth)
 
-        smoothed = plane(smooth, 0) if func.luma_only else smooth  # type: ignore
+        smoothed = plane(smooth, 0) if func.luma_only else smooth
 
         if pre_ss > 1.0:
-            smoothed = pre_supersampler.scale(smoothed, work_clip.width, work_clip.height)  # type: ignore
+            smoothed = pre_supersampler.scale(smoothed, work_clip.width, work_clip.height)
 
     if contra:
         if isinstance(contra, int):
-            smoothed = contrasharpening(smoothed, work_clip, contra, 13, planes=planes)
+            smoothed = contrasharpening(smoothed, work_clip, contra, mode=13, planes=planes)
         else:
             smoothed = contrasharpening_dehalo(smoothed, work_clip, contra, planes=planes)
 
@@ -161,7 +161,7 @@ def smooth_dering(
 
 def vine_dehalo(
     clip: vs.VideoNode, strength: float | Sequence[float] = 16.0, sharp: float = 0.5, sigma: float | list[float] = 1.0,
-    supersampler: ScalerT = Nnedi3, downscaler: ScalerT = Catrom, planes: PlanesT = 0, **kwargs
+    supersampler: ScalerT = Nnedi3, downscaler: ScalerT = Catrom, planes: PlanesT = 0, **kwargs: Any
 ) -> vs.VideoNode:
     """
     :param clip:            Clip to process.
@@ -180,18 +180,20 @@ def vine_dehalo(
     if FieldBased.from_video(clip).is_inter:
         raise UnsupportedFieldBasedError('Only progressive video is supported!', func.func)
 
+    strength = to_arr(strength)
+    supersampler = Scaler.ensure_obj(supersampler, func.func)
+    downscaler = Scaler.ensure_obj(downscaler, func.func)
+
     sharp = min(max(sharp, 0.0), 1.0)
     simr = kwargs.pop('simr', None)
 
     # Only God knows how these were derived.
-    constants = (
-        0.3926327792690057290863679493724 * sharp,
-        18.880334973195822973214959957208,
-        0.5862453661304626725671053478676
-    )
+    constants0 = 0.3926327792690057290863679493724 * sharp
+    constants1 = 18.880334973195822973214959957208
+    constants2 = 0.5862453661304626725671053478676
 
-    weight = constants[0] * log(1 + 1 / constants[0])
-    h_refine = constants[1] * (strength / constants[1]) ** constants[2]
+    weight = constants0 * log(1 + 1 / constants0)
+    h_refine = [constants1 * (s / constants1) ** constants2 for s in strength]
 
     supersampled = supersampler.multi(func.work_clip)
     supersampled = nl_means(supersampled, strength, tr=0, simr=0, **kwargs)
