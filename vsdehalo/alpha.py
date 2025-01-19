@@ -8,7 +8,7 @@ from vsexprtools import ExprOp, combine, complexpr_available, norm_expr
 from vskernels import Bilinear, BSpline, Lanczos, Mitchell, NoShift, Point, Scaler, ScalerT
 from vsmasktools import EdgeDetect, Morpho, RadiusT, Robinson3, XxpandMode, grow_mask, retinex
 from vsrgtools import (
-    BlurMatrixBase, RemoveGrainMode, RepairMode, box_blur, contrasharpening,
+    BlurMatrix, BlurMatrixBase, RemoveGrainMode, RepairMode, box_blur, contrasharpening,
     contrasharpening_dehalo, gauss_blur, limit_filter, repair
 )
 from vsrgtools.util import norm_rmode_planes
@@ -363,22 +363,21 @@ def fine_dehalo2(
     mode: OneDimConvModeT = ConvMode.HV,
     radius: int = 2, mask_radius: int = 2,
     brightstr: float = 1.0, darkstr: float = 1.0,
-    dark: bool | None = True, planes: PlanesT = 0,
+    dark: bool | None = True,
     show_mask: bool = False
 ) -> vs.VideoNode:
     """
     Halo removal function for 2nd order halos.
 
-    :param clip:        Source clip.
-    :param mode:        Horizontal/Vertical or both ways.
-    :param radius:      Radius for mask growing.
-    :param radius:  Radius for the fixing convolution.
-    :param brightstr:   Strength factor for bright halos.
-    :param darkstr:     Strength factor for dark halos.
-    :param dark:        Whether to filter for dark or bright haloing.
-                        None for disable merging with source clip.
-    :param planes:      Planes to process.
-    :param show_mask:   Whether to return the computed mask.
+    :param clip:            Source clip.
+    :param mode:            Horizontal/Vertical or both ways.
+    :param radius:          Radius for the fixing convolution.
+    :param mask_radius:     Radius for mask growing.
+    :param brightstr:       Strength factor for bright halos.
+    :param darkstr:         Strength factor for dark halos.
+    :param dark:            Whether to filter for dark or bright haloing.
+                            None for disable merging with source clip.
+    :param show_mask:       Whether to return the computed mask.
 
     :return:            Dehaloed clip.
     """
@@ -387,56 +386,31 @@ def fine_dehalo2(
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise ValueError('fine_dehalo2: format not supported')
 
-    planes = normalize_planes(clip, planes)
-
-    is_float = clip.format.sample_type == vs.FLOAT
-
-    work_clip, *chroma = split(clip) if planes == [0] else (clip, )
+    work_clip, *chroma = split(clip)
 
     mask_h = mask_v = None
 
-    mask_h_mat = BlurMatrixBase([1, 2, 1, 0, 0, 0, -1, -2, -1], ConvMode.HORIZONTAL)
-    mask_v_mat = BlurMatrixBase([1, 0, -1, 2, 0, -2, 1, 0, -1], ConvMode.VERTICAL)
-
     if mode in {ConvMode.HV, ConvMode.VERTICAL}:
-        mask_h = mask_h_mat(work_clip, planes, divisor=4, saturate=False)
+        mask_h = BlurMatrixBase([1, 2, 1, 0, 0, 0, -1, -2, -1], ConvMode.V)(work_clip, divisor=4, saturate=False)
 
     if mode in {ConvMode.HV, ConvMode.HORIZONTAL}:
-        mask_v = mask_v_mat(work_clip, planes, divisor=4, saturate=False)
+        mask_v = BlurMatrixBase([1, 0, -1, 2, 0, -2, 1, 0, -1], ConvMode.H)(work_clip, divisor=4, saturate=False)
 
     if mask_h and mask_v:
-        mask_h2 = norm_expr([mask_h, mask_v], 'x 3 * y -', planes)
-        mask_v2 = norm_expr([mask_v, mask_h], 'x 3 * y -', planes)
+        mask_h2 = norm_expr([mask_h, mask_v], ['x 3 * y -', ExprOp.clamp()])
+        mask_v2 = norm_expr([mask_v, mask_h], ['x 3 * y -', ExprOp.clamp()])
         mask_h, mask_v = mask_h2, mask_v2
     elif mask_h:
-        mask_h = norm_expr(mask_h, 'x 3 *', planes)
+        mask_h = norm_expr(mask_h, ['x 3 *', ExprOp.clamp()])
     elif mask_v:
-        mask_v = norm_expr(mask_v, 'x 3 *', planes)
+        mask_v = norm_expr(mask_v, ['x 3 *', ExprOp.clamp()])
 
-    if is_float:
-        mask_h = mask_h and mask_h.std.Limiter(planes=planes)
-        mask_v = mask_v and mask_v.std.Limiter(planes=planes)
+    if mask_h:
+        mask_h = grow_mask(mask_h, mask_radius, coord=[0, 1, 0, 0, 0, 0, 1, 0], multiply=1.8)
+    if mask_v:
+        mask_v = grow_mask(mask_v, mask_radius, coord=[0, 0, 0, 1, 1, 0, 0, 0], multiply=1.8)
 
-    fix_weights = list(range(-1, -radius - 1, -1))
-    fix_rweights = list(reversed(fix_weights))
-    fix_zeros, fix_mweight = [0] * radius, 10 * (radius + 2)
-
-    fix_h = BlurMatrixBase(
-        [*fix_weights, *fix_zeros, fix_mweight, *fix_zeros, *fix_rweights], ConvMode.HORIZONTAL
-    )(work_clip, planes)
-
-    fix_v = BlurMatrixBase(
-        [*fix_rweights, *fix_zeros, fix_mweight, *fix_zeros, *fix_weights], ConvMode.VERTICAL
-    )(work_clip, planes)
-
-    mask_h, mask_v = [
-        grow_mask(mask, mask_radius, multiply=1.8, planes=planes, coordinates=coord) if mask else None
-        for mask, coord in [
-            (mask_h, [0, 1, 0, 0, 0, 0, 1, 0]), (mask_v, [0, 0, 0, 1, 1, 0, 0, 0])
-        ]
-    ]
-
-    if is_float:
+    if clip.format.sample_type == vs.FLOAT:
         mask_h = mask_h and mask_h.std.Limiter()
         mask_v = mask_v and mask_v.std.Limiter()
 
@@ -448,27 +422,27 @@ def fine_dehalo2(
 
         return ret_mask
 
+    fix_weights = list(range(-1, -radius - 1, -1))
+    fix_rweights = list(reversed(fix_weights))
+    fix_zeros, fix_mweight = [0] * radius, 10 * (radius + 2)
+
+    fix_h_conv = [*fix_weights, *fix_zeros, fix_mweight, *fix_zeros, *fix_rweights]
+    fix_v_conv = [*fix_rweights, *fix_zeros, fix_mweight, *fix_zeros, *fix_weights]
+
+    fix_h = ExprOp.convolution('x', fix_h_conv, mode=ConvMode.HORIZONTAL)(work_clip)
+    fix_v = ExprOp.convolution('x', fix_v_conv, mode=ConvMode.VERTICAL)(work_clip)
+
     dehaloed = work_clip
-    op = '' if dark is None else ExprOp.MAX if dark else ExprOp.MIN
 
-    if complexpr_available and mask_h and mask_v and clip.format.sample_type is vs.FLOAT:
-        d_clips = [work_clip, fix_h, fix_v, mask_h, mask_v]
-        d_expr = 'x 1 a - * y a * + 1 b - * z b * +'
+    for fix, mask in [(fix_h, mask_v), (fix_v, mask_h)]:
+        if mask:
+            dehaloed = dehaloed.std.MaskedMerge(fix, mask)
 
-        if op:
-            d_clips, d_expr = [*d_clips, clip], f'{d_expr} x {op}'
-
-        dehaloed = norm_expr(d_clips, d_expr, planes)
-    else:
-        for fix, mask in [(fix_h, mask_v), (fix_v, mask_h)]:
-            if mask:
-                dehaloed = dehaloed.std.MaskedMerge(fix, mask)
-
-        if op != '':
-            dehaloed = combine([work_clip, dehaloed], op)  # type: ignore[arg-type]
+    if dark is not None:
+        dehaloed = combine([work_clip, dehaloed], ExprOp.MAX if dark else ExprOp.MIN)
 
     if darkstr != brightstr != 1.0:
-        dehaloed = _limit_dehalo(work_clip, dehaloed, darkstr, brightstr, planes)
+        dehaloed = _limit_dehalo(work_clip, dehaloed, darkstr, brightstr, 0)
 
     if not chroma:
         return dehaloed
