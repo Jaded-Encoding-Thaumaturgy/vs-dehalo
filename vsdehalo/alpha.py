@@ -4,11 +4,11 @@ from typing import Any, Sequence, final
 
 from vsaa import Nnedi3
 from vsdenoise import Prefilter
-from vsexprtools import ExprOp, combine, complexpr_available, norm_expr
+from vsexprtools import ExprOp, combine, norm_expr
 from vskernels import Bilinear, BSpline, Lanczos, Mitchell, NoShift, Point, Scaler, ScalerT
 from vsmasktools import EdgeDetect, Morpho, RadiusT, Robinson3, XxpandMode, grow_mask, retinex
 from vsrgtools import (
-    BlurMatrix, BlurMatrixBase, RemoveGrainMode, RepairMode, box_blur, contrasharpening,
+    BlurMatrixBase, RemoveGrainMode, RepairMode, box_blur, contrasharpening,
     contrasharpening_dehalo, gauss_blur, limit_filter, repair
 )
 from vsrgtools.util import norm_rmode_planes
