@@ -650,7 +650,7 @@ def dehalomicron(
     ymask_ref0 = gauss_blur(y_mask, sigma=sigma_ref)
 
     dehalo_mask = norm_expr([dehalo_ref0mask, y_mask], 'x y - abs 100 *')
-    dehalo_mask = RemoveGrainMode.CIRCLE_BLUR(dehalo_mask)
+    dehalo_mask = RemoveGrainMode.BOX_BLUR_NO_CENTER(dehalo_mask)
     dehalo_mask = RemoveGrainMode.MINMAX_MEDIAN_OPP(dehalo_mask)
 
     if brz:
