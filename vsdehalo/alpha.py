@@ -16,7 +16,7 @@ from vstools import (
     ConvMode, CustomIndexError, CustomIntEnum, CustomValueError, FieldBased, FuncExceptT,
     FunctionUtil, InvalidColorFamilyError, KwargsT, OneDimConvModeT, PlanesT,
     UnsupportedFieldBasedError, check_ref_clip, check_variable, check_variable_format, clamp,
-    cround, fallback, get_peak_value, get_y, join, mod4, normalize_planes, normalize_seq,
+    cround, fallback, get_peak_value, get_y, join, limiter, mod4, normalize_planes, normalize_seq,
     scale_mask, split, to_arr, vs
 )
 
@@ -411,8 +411,8 @@ def fine_dehalo2(
         mask_v = grow_mask(mask_v, mask_radius, coord=[0, 0, 0, 1, 1, 0, 0, 0], multiply=1.8)
 
     if clip.format.sample_type == vs.FLOAT:
-        mask_h = mask_h and mask_h.std.Limiter()
-        mask_v = mask_v and mask_v.std.Limiter()
+        mask_h = mask_h and limiter(mask_h, func=func)
+        mask_v = mask_v and limiter(mask_v, func=func)
 
     if show_mask:
         if mask_h and mask_v:
