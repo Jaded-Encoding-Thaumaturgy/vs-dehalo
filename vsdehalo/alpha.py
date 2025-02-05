@@ -381,6 +381,8 @@ def fine_dehalo2(
 
     :return:            Dehaloed clip.
     """
+    func = fine_dehalo2
+
     assert clip.format
 
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
@@ -397,18 +399,18 @@ def fine_dehalo2(
         mask_v = BlurMatrixBase([1, 0, -1, 2, 0, -2, 1, 0, -1], ConvMode.H)(work_clip, divisor=4, saturate=False)
 
     if mask_h and mask_v:
-        mask_h2 = norm_expr([mask_h, mask_v], ['x 3 * y -', ExprOp.clamp()])
-        mask_v2 = norm_expr([mask_v, mask_h], ['x 3 * y -', ExprOp.clamp()])
+        mask_h2 = norm_expr([mask_h, mask_v], ['x 3 * y -', ExprOp.clamp()], func=func)
+        mask_v2 = norm_expr([mask_v, mask_h], ['x 3 * y -', ExprOp.clamp()], func=func)
         mask_h, mask_v = mask_h2, mask_v2
     elif mask_h:
-        mask_h = norm_expr(mask_h, ['x 3 *', ExprOp.clamp()])
+        mask_h = norm_expr(mask_h, ['x 3 *', ExprOp.clamp()], func=func)
     elif mask_v:
-        mask_v = norm_expr(mask_v, ['x 3 *', ExprOp.clamp()])
+        mask_v = norm_expr(mask_v, ['x 3 *', ExprOp.clamp()], func=func)
 
     if mask_h:
-        mask_h = grow_mask(mask_h, mask_radius, coord=[0, 1, 0, 0, 0, 0, 1, 0], multiply=1.8)
+        mask_h = grow_mask(mask_h, mask_radius, coord=[0, 1, 0, 0, 0, 0, 1, 0], multiply=1.8, func=func)
     if mask_v:
-        mask_v = grow_mask(mask_v, mask_radius, coord=[0, 0, 0, 1, 1, 0, 0, 0], multiply=1.8)
+        mask_v = grow_mask(mask_v, mask_radius, coord=[0, 0, 0, 1, 1, 0, 0, 0], multiply=1.8, func=func)
 
     if clip.format.sample_type == vs.FLOAT:
         mask_h = mask_h and limiter(mask_h, func=func)
@@ -429,8 +431,8 @@ def fine_dehalo2(
     fix_h_conv = [*fix_weights, *fix_zeros, fix_mweight, *fix_zeros, *fix_rweights]
     fix_v_conv = [*fix_rweights, *fix_zeros, fix_mweight, *fix_zeros, *fix_weights]
 
-    fix_h = ExprOp.convolution('x', fix_h_conv, mode=ConvMode.HORIZONTAL)(work_clip)
-    fix_v = ExprOp.convolution('x', fix_v_conv, mode=ConvMode.VERTICAL)(work_clip)
+    fix_h = ExprOp.convolution('x', fix_h_conv, mode=ConvMode.HORIZONTAL)(work_clip, func=func)
+    fix_v = ExprOp.convolution('x', fix_v_conv, mode=ConvMode.VERTICAL)(work_clip, func=func)
 
     dehaloed = work_clip
 
